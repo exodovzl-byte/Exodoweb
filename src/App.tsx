@@ -21,6 +21,7 @@ import { OrderTrackingModal } from './components/tracking/OrderTrackingModal';
 import { AuthModal } from './components/auth/AuthModal';
 import { AdminLoginModal } from './components/admin/AdminLoginModal';
 import { FloatingWhatsApp } from './components/common/FloatingWhatsApp';
+import { MobileBottomNav } from './components/layout/MobileBottomNav';
 
 const MainContent: React.FC = () => {
   const { currentPage, brandConfig, isAdminAuthenticated } = useStore();
@@ -62,7 +63,7 @@ const MainContent: React.FC = () => {
       <Navbar />
 
       {/* Main View Router */}
-      <main className="flex-1">
+      <main className="flex-1 pb-20 lg:pb-0">
         {currentPage === 'inicio' && (
           <div className="animate-in fade-in duration-200">
             {brandConfig.homeSectionsOrder.map((sec) => renderHomeSection(sec))}
@@ -105,6 +106,9 @@ const MainContent: React.FC = () => {
 
       {/* Pinned WhatsApp Widget (+58 414-0153904) */}
       <FloatingWhatsApp />
+
+      {/* Mobile Sticky Thumb Navigation Bar */}
+      <MobileBottomNav />
     </div>
   );
 };

@@ -688,6 +688,163 @@ export const BrandAssetManager: React.FC = () => {
         </div>
       </div>
 
+      {/* PWA Phone Home Screen Icon Guide & Interactive Simulator */}
+      <div className="p-6 rounded-2xl bg-gradient-to-r from-neutral-950 via-[#0D253A]/40 to-neutral-950 border border-neutral-800 shadow-xl space-y-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="p-1.5 rounded-lg bg-amber-400/10 text-amber-400 border border-amber-400/20">
+                <Smartphone size={18} />
+              </span>
+              <h3 className="text-lg font-black text-white uppercase tracking-tight font-brand-heading">
+                Ícono de la App en el Teléfono (PWA en Android & iPhone)
+              </h3>
+            </div>
+            <p className="text-xs text-neutral-400 mt-1 max-w-2xl leading-relaxed">
+              Descubre cómo se ve la aplicación instalada en los teléfonos de tus clientes y aprende cómo cambiar y actualizar el ícono en la pantalla de inicio.
+            </p>
+          </div>
+          <span className="px-3 py-1.5 rounded-xl bg-amber-400/10 text-amber-400 border border-amber-400/30 text-xs font-mono font-bold">
+            PWA Standalone Ready
+          </span>
+        </div>
+
+        {/* Live Phone Mockups Comparison */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-2">
+          
+          {/* Phone Mockup 1: Android HomeScreen */}
+          <div className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 flex flex-col justify-between">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                Pantalla de Inicio Android (Chrome)
+              </span>
+              <span className="text-[10px] font-mono text-neutral-400">Maskable 512x512</span>
+            </div>
+
+            {/* Simulated Android Screen */}
+            <div className="my-5 p-4 rounded-2xl bg-gradient-to-b from-neutral-900 via-neutral-950 to-black border-2 border-neutral-800 shadow-inner flex flex-col items-center">
+              {/* Android Status Bar */}
+              <div className="w-full flex items-center justify-between text-[9px] font-mono text-neutral-500 pb-4">
+                <span>12:30</span>
+                <span>LTE • 98%</span>
+              </div>
+
+              {/* Installed App Icon */}
+              <div className="flex flex-col items-center gap-1.5 my-3">
+                <div className="w-16 h-16 rounded-2xl bg-black border-2 border-amber-400/60 p-2 flex items-center justify-center shadow-xl shadow-amber-400/10 overflow-hidden group hover:scale-105 transition-transform">
+                  {currentAssets.appIcon || currentAssets.appIconSquare ? (
+                    <img
+                      src={currentAssets.appIcon || currentAssets.appIconSquare || ''}
+                      alt="Ícono PWA"
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <ExodoEmblemLogo color="#C8C3B3" className="w-10 h-10" />
+                  )}
+                </div>
+                <span className="text-xs font-bold text-white tracking-wide">
+                  ÉXODO
+                </span>
+                <span className="text-[9px] text-amber-400 font-mono">App Instalada</span>
+              </div>
+
+              {/* Android Dock hint */}
+              <div className="w-full pt-4 mt-2 border-t border-neutral-900 flex justify-around text-neutral-600 text-xs">
+                <span>📞</span>
+                <span>💬</span>
+                <span>🌐</span>
+                <span>📷</span>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-neutral-400 leading-relaxed">
+              En Android, el ícono se enmarca en un formato redondeado adaptativo con fondo negro y el nombre <strong>ÉXODO</strong> en la pantalla principal.
+            </p>
+          </div>
+
+          {/* Phone Mockup 2: iPhone / iPad HomeScreen */}
+          <div className="p-5 rounded-2xl bg-neutral-900/70 border border-neutral-800 flex flex-col justify-between">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+              <span className="text-xs font-bold text-white uppercase tracking-wider flex items-center gap-2">
+                <span className="w-2 h-2 rounded-full bg-blue-400"></span>
+                Pantalla de Inicio iPhone (Safari)
+              </span>
+              <span className="text-[10px] font-mono text-neutral-400">Apple Touch Icon</span>
+            </div>
+
+            {/* Simulated iPhone Screen */}
+            <div className="my-5 p-4 rounded-2xl bg-gradient-to-b from-neutral-900 via-neutral-950 to-black border-2 border-neutral-800 shadow-inner flex flex-col items-center">
+              {/* iOS Status Bar & Dynamic Island */}
+              <div className="w-full flex items-center justify-between text-[9px] font-mono text-neutral-500 pb-4">
+                <span>9:41</span>
+                <div className="w-16 h-3 bg-neutral-800 rounded-full"></div>
+                <span>5G 100%</span>
+              </div>
+
+              {/* Installed App Icon */}
+              <div className="flex flex-col items-center gap-1.5 my-3">
+                <div className="w-16 h-16 rounded-[18px] bg-black border border-neutral-700 p-2 flex items-center justify-center shadow-2xl overflow-hidden group hover:scale-105 transition-transform">
+                  {currentAssets.appIcon || currentAssets.appIconSquare ? (
+                    <img
+                      src={currentAssets.appIcon || currentAssets.appIconSquare || ''}
+                      alt="Ícono Apple"
+                      className="w-full h-full object-contain"
+                    />
+                  ) : (
+                    <ExodoEmblemLogo color="#C8C3B3" className="w-10 h-10" />
+                  )}
+                </div>
+                <span className="text-xs font-bold text-white tracking-wide">
+                  ÉXODO
+                </span>
+                <span className="text-[9px] text-neutral-400 font-mono">Safari PWA</span>
+              </div>
+
+              {/* iOS Dock bar */}
+              <div className="w-24 h-1 bg-white/40 rounded-full mt-4"></div>
+            </div>
+
+            <p className="text-[11px] text-neutral-400 leading-relaxed">
+              En iOS Safari, Apple utiliza el archivo PNG sin transparencia con esquinas squircle redondeadas automáticas del sistema.
+            </p>
+          </div>
+
+        </div>
+
+        {/* How to Change the Icon Step-by-Step Guide */}
+        <div className="p-4 rounded-xl bg-neutral-900 border border-neutral-800 space-y-3">
+          <h4 className="text-xs font-bold text-amber-400 uppercase tracking-wider flex items-center gap-2">
+            <Info size={15} />
+            <span>Guía Oficial: ¿Cómo cambiar o actualizar el ícono en tu teléfono?</span>
+          </h4>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-neutral-300">
+            <div className="p-3 rounded-lg bg-black/60 border border-neutral-800 space-y-1">
+              <strong className="text-white block font-mono">Paso 1: Sube la imagen</strong>
+              <p className="text-neutral-400 text-[11px]">
+                En la sección superior de esta página, sube tu logo o emblema en el slot <strong>"Ícono de Aplicación / Favicon"</strong> o <strong>"Ícono Cuadrado HD"</strong>.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-lg bg-black/60 border border-neutral-800 space-y-1">
+              <strong className="text-white block font-mono">Paso 2: Si ya la tenías instalada</strong>
+              <p className="text-neutral-400 text-[11px]">
+                Google Chrome e iOS guardan el ícono en la memoria del teléfono al instalarlo. Para forzar al teléfono a mostrar el ícono nuevo, <strong>elimina o desinstala el acceso directo de ÉXODO de tu pantalla de inicio</strong>.
+              </p>
+            </div>
+
+            <div className="p-3 rounded-lg bg-black/60 border border-neutral-800 space-y-1">
+              <strong className="text-white block font-mono">Paso 3: Vuelve a Instalar</strong>
+              <p className="text-neutral-400 text-[11px]">
+                Abre <strong>https://exodoweb.vercel.app</strong> en Chrome/Safari y presiona nuevamente el botón <strong>"Instalar App"</strong>. El teléfono descargará la nueva versión con el ícono actualizado.
+              </p>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
       {/* HTML Code & Index.html Download Section */}
       <div className="p-6 rounded-2xl bg-gradient-to-b from-neutral-900 to-neutral-950 border border-neutral-800 shadow-xl space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">

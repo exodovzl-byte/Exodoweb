@@ -77,7 +77,7 @@ export const FeaturedProducts: React.FC = () => {
         </div>
 
         {/* Product Cards Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           {displayedProducts.map((product) => {
             const hasDiscount = product.discountPrice && product.discountPrice < product.basePrice;
             const currentPrice = hasDiscount ? product.discountPrice : product.basePrice;
@@ -98,24 +98,24 @@ export const FeaturedProducts: React.FC = () => {
                   />
                   
                   {/* Badges Overlay */}
-                  <div className="absolute top-3 left-3 flex flex-col gap-1.5">
+                  <div className="absolute top-2 left-2 sm:top-3 sm:left-3 flex flex-col gap-1 max-w-[85%]">
                     {hasDiscount && (
-                      <span className="px-2.5 py-1 bg-amber-500 text-black text-[10px] font-black uppercase tracking-wider rounded shadow-md">
+                      <span className="px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-amber-500 text-black text-[9px] sm:text-[10px] font-black uppercase tracking-wider rounded shadow-md">
                         Oferta
                       </span>
                     )}
                     {product.badge && !hasDiscount && (
-                      <span className="px-2.5 py-1 bg-[#0D253A] text-white text-[10px] font-bold uppercase tracking-wider rounded border border-neutral-700 shadow-md">
+                      <span className="px-1.5 sm:px-2.5 py-0.5 sm:py-1 bg-[#0D253A] text-white text-[8px] sm:text-[10px] font-bold uppercase tracking-wider rounded border border-neutral-700 shadow-md truncate">
                         {product.badge}
                       </span>
                     )}
-                    <span className="px-2 py-0.5 bg-black/75 backdrop-blur-md text-[#C8C3B3] text-[9px] uppercase tracking-wider rounded border border-neutral-800">
+                    <span className="px-1.5 py-0.5 bg-black/75 backdrop-blur-md text-[#C8C3B3] text-[8px] sm:text-[9px] uppercase tracking-wider rounded border border-neutral-800 truncate">
                       {product.collection}
                     </span>
                   </div>
 
-                  {/* Hover Quick Action Buttons */}
-                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 flex items-center justify-center gap-2 p-4">
+                  {/* Hover Quick Action Buttons (Desktop) */}
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-200 hidden md:flex items-center justify-center gap-2 p-4">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
@@ -144,56 +144,67 @@ export const FeaturedProducts: React.FC = () => {
                 </div>
 
                 {/* Card Content */}
-                <div className="p-4 flex flex-col flex-grow justify-between">
+                <div className="p-2.5 sm:p-4 flex flex-col flex-grow justify-between">
                   <div>
                     {/* Biblical Verse Snippet */}
-                    <p className="text-[10px] font-mono text-amber-400 font-semibold truncate uppercase">
+                    <p className="text-[9px] sm:text-[10px] font-mono text-amber-400 font-semibold truncate uppercase">
                       {product.scripture.split('—')[0]}
                     </p>
                     
                     {/* Title */}
-                    <h3 className="mt-1 text-sm font-bold text-white group-hover:text-[#C8C3B3] transition-colors line-clamp-1">
+                    <h3 className="mt-0.5 text-xs sm:text-sm font-bold text-white group-hover:text-[#C8C3B3] transition-colors line-clamp-1">
                       {product.name}
                     </h3>
 
                     {/* Specs snippet */}
-                    <p className="mt-1 text-[11px] text-neutral-400 line-clamp-1">
+                    <p className="mt-0.5 text-[10px] sm:text-[11px] text-neutral-400 truncate">
                       {product.category === 'franelas' ? '100% Algodón 240g • DTF Textil' : product.materialSpecs.split(',')[0]}
                     </p>
                   </div>
 
                   {/* Pricing and Action */}
-                  <div className="mt-4 pt-3 border-t border-neutral-800/80 flex items-center justify-between">
+                  <div className="mt-2.5 sm:mt-4 pt-2 sm:pt-3 border-t border-neutral-800/80 flex items-center justify-between gap-1">
                     <div>
                       {hasDiscount ? (
-                        <div className="flex items-baseline gap-2">
-                          <span className="text-base font-black text-amber-400">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-sm sm:text-base font-black text-amber-400">
                             ${product.discountPrice}
                           </span>
-                          <span className="text-xs text-neutral-500 line-through">
+                          <span className="text-[10px] sm:text-xs text-neutral-500 line-through">
                             ${product.basePrice}
                           </span>
                         </div>
                       ) : (
-                        <span className="text-base font-black text-white">
+                        <span className="text-sm sm:text-base font-black text-white">
                           ${product.basePrice}
                         </span>
                       )}
-                      <span className="text-[10px] text-neutral-500 block">
-                        Bs. {((currentPrice || 0) * 46).toFixed(0)} (BCV)
+                      <span className="text-[8px] sm:text-[10px] text-neutral-500 block truncate">
+                        ~ Bs. {((currentPrice || 0) * 46).toFixed(0)}
                       </span>
                     </div>
 
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setActivePdpProduct(product);
-                      }}
-                      className="text-xs font-semibold text-neutral-300 hover:text-white flex items-center gap-1 group-hover:translate-x-0.5 transition-transform"
-                    >
-                      <span>Ver</span>
-                      <ArrowRight size={13} />
-                    </button>
+                    <div className="flex items-center gap-1">
+                      {/* Mobile Quick Add to Cart button */}
+                      <button
+                        onClick={(e) => handleQuickAdd(product, e)}
+                        className="md:hidden p-1.5 rounded-lg bg-amber-400 text-black hover:bg-amber-300 active:scale-95 transition-all shadow"
+                        title="Añadir al carrito"
+                      >
+                        <ShoppingBag size={14} />
+                      </button>
+
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setActivePdpProduct(product);
+                        }}
+                        className="text-[10px] sm:text-xs font-semibold text-neutral-300 hover:text-white flex items-center gap-0.5 group-hover:translate-x-0.5 transition-transform"
+                      >
+                        <span className="hidden sm:inline">Ver</span>
+                        <ArrowRight size={12} />
+                      </button>
+                    </div>
                   </div>
 
                 </div>

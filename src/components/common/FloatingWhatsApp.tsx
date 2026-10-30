@@ -59,7 +59,7 @@ export const FloatingWhatsApp: React.FC = () => {
     : encodeURIComponent('¡Hola ÉXODO! Dejo mi mensaje fuera de horario para que me respondan al abrir el taller a las 8:00 AM.');
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end">
+    <div className="fixed bottom-20 lg:bottom-6 right-4 sm:right-6 z-50 flex flex-col items-end">
       {isOpen && (
         <div className="mb-3 w-84 sm:w-96 rounded-2xl bg-neutral-950 border border-neutral-700/80 p-5 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-3 duration-200 text-white">
           

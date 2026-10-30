@@ -386,9 +386,9 @@ export const CustomLab: React.FC = () => {
         </div>
 
         {/* Product Type Selector Tabs */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-8">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 mb-6 sm:mb-8">
           {[
-            { id: 'franela', label: '1. Franela 240g', specs: 'Algodón Pesado • Frente & Espalda' },
+            { id: 'franela', label: '1. Franela 240g', specs: 'Algodón Pesado • Frente/Espalda' },
             { id: 'tote', label: '2. Tote Bag', specs: 'Lienzo Crudo Resistente' },
             { id: 'lamina', label: '3. Lámina Sublimada', specs: 'Aluminio Náutico Frontal' },
             { id: 'stickers', label: '4. Stickers Packs', specs: 'UV DTF Relieve & Vinilo' },
@@ -399,7 +399,7 @@ export const CustomLab: React.FC = () => {
                 setProductType(item.id as any);
                 setArtworkPos({ x: 0, y: 0 });
               }}
-              className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
+              className={`p-2.5 sm:p-3.5 rounded-xl border text-left transition-all cursor-pointer ${
                 productType === item.id
                   ? 'bg-[#0D253A] border-amber-400 text-white shadow-xl ring-1 ring-amber-400/40'
                   : 'bg-neutral-950 border-neutral-800 text-neutral-400 hover:border-neutral-700'
@@ -416,10 +416,10 @@ export const CustomLab: React.FC = () => {
         </div>
 
         {/* WORKSPACE GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 sm:gap-8 items-start">
           
           {/* LEFT: 100% Frontal Clean Mockup Canvas (7 cols) */}
-          <div className="lg:col-span-7 bg-neutral-950 border border-neutral-800 rounded-2xl p-6 flex flex-col justify-between shadow-2xl">
+          <div className="lg:col-span-7 bg-neutral-950 border border-neutral-800 rounded-2xl p-3 sm:p-6 flex flex-col justify-between shadow-2xl">
             
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-neutral-800">
               <div>
@@ -515,7 +515,7 @@ export const CustomLab: React.FC = () => {
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               onPointerLeave={handlePointerUp}
-              className="relative aspect-square w-full my-6 bg-gradient-to-b from-neutral-900/60 to-black rounded-2xl overflow-hidden border border-neutral-800 flex items-center justify-center select-none touch-none"
+              className="relative aspect-square w-full my-3 sm:my-6 bg-gradient-to-b from-neutral-900/60 to-black rounded-2xl overflow-hidden border border-neutral-800 flex items-center justify-center select-none touch-none"
             >
               
               {/* If an admin image mockup is uploaded, display it as background */}
@@ -839,7 +839,7 @@ export const CustomLab: React.FC = () => {
           </div>
 
           {/* RIGHT: Tools & Configurations Panel (5 cols) */}
-          <div className="lg:col-span-5 bg-neutral-950 border border-neutral-800 rounded-2xl p-6 space-y-6 shadow-2xl">
+          <div className="lg:col-span-5 bg-neutral-950 border border-neutral-800 rounded-2xl p-3.5 sm:p-6 space-y-5 sm:space-y-6 shadow-2xl">
             
             {/* Tool Navigation Bar (No AI) */}
             <div className="grid grid-cols-4 gap-1 p-1 bg-neutral-900 rounded-xl border border-neutral-800">
