@@ -1,0 +1,55 @@
+{
+  "id": "/",
+  "name": "ÉXODO — Urban Christian Streetwear & Custom Goods",
+  "short_name": "ÉXODO",
+  "description": "Moda urbana y artículos personalizados con propósito cristiano en Venezuela.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#000000",
+  "theme_color": "#000000",
+  "orientation": "portrait",
+  "categories": ["shopping", "lifestyle"],
+  "icons": [
+    {
+      "src": "/pwa-192x192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/pwa-maskable-512x512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Tienda ÉXODO",
+      "short_name": "Tienda",
+      "description": "Ver catálogo de colecciones y streetwear",
+      "url": "/?page=tienda",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Custom Lab",
+      "short_name": "Personalizar",
+      "description": "Laboratorio de diseño y personalización DTF",
+      "url": "/?page=personalizador",
+      "icons": [{ "src": "/pwa-192x192.png", "sizes": "192x192" }]
+    }
+  ]
+}

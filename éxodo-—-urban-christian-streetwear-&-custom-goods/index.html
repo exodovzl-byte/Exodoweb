@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ÉXODO — Urban Christian Streetwear & Custom Goods</title>
+    <meta name="description" content="Venezuelan Urban Christian Streetwear & Custom Goods: Moda urbana y artículos personalizados con propósito que llevan la Palabra de Dios a todos lados." />
+    <meta property="og:title" content="ÉXODO — Urban Christian Streetwear & Custom Goods" />
+    <meta property="og:description" content="Venezuelan Urban Christian Streetwear & Custom Goods: Moda urbana y artículos personalizados con propósito que llevan la Palabra de Dios a todos lados." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Anton&family=Bebas+Neue&family=Cinzel:wght@600;800;900&family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;700&display=swap" rel="stylesheet">
+    
+    <!-- PWA Standard & Mobile Capabilities -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" content="#000000" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="ÉXODO" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+    <link rel="alternate icon" href="/favicon.ico" />
+  </head>
+  <body class="bg-[#000000] text-[#C8C3B3] antialiased selection:bg-[#C8C3B3] selection:text-[#000000]">
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(reg => console.log('ÉXODO PWA Service Worker registrado con éxito:', reg.scope))
+            .catch(err => console.warn('Error registrando Service Worker:', err));
+        });
+      }
+    </script>
+  </body>
+</html>
+

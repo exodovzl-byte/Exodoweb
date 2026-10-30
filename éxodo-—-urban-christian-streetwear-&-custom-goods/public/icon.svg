@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <rect width="512" height="512" fill="#000000" rx="96" />
+  <circle cx="256" cy="256" r="230" fill="#0D253A" stroke="#C8C3B3" stroke-width="4" stroke-opacity="0.3" />
+  <g transform="translate(106, 106) scale(0.3)" fill="#C8C3B3">
+    <!-- Sigma Core -->
+    <path d="M320 120 H670 C685 120 690 135 680 145 L460 380 L680 615 C690 625 685 640 670 640 H320 C305 640 300 625 310 615 L480 430 L310 245 C300 235 305 220 320 220 Z" fill="#FBBF24" />
+    <!-- Wing flame left -->
+    <path d="M210 50 C210 50 80 180 80 400 C80 650 250 850 400 950 C380 880 320 780 340 670 C360 560 280 480 200 420 C140 370 120 280 180 160 C200 120 210 50 210 50 Z" />
+    <!-- Wing flame right -->
+    <path d="M790 50 C790 50 920 180 920 400 C920 650 750 850 600 950 C620 880 680 780 660 670 C640 560 720 480 800 420 C860 370 880 280 820 160 C800 120 790 50 790 50 Z" />
+  </g>
+  <text x="256" y="440" font-family="'Impact', 'Bebas Neue', sans-serif" font-size="52" font-weight="900" fill="#C8C3B3" text-anchor="middle" letter-spacing="8">ÉXODO</text>
+</svg>
