@@ -23,7 +23,17 @@ import {
   Banknote,
   Repeat,
   ShieldCheck,
-  Calculator
+  Calculator,
+  PieChart,
+  Users,
+  Package,
+  Wrench,
+  Shield,
+  HeartHandshake,
+  Percent,
+  Calendar,
+  ArrowRight,
+  UserCheck
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { CashTransaction, DebtRecord } from '../../types';
@@ -41,10 +51,15 @@ export const TreasuryManager: React.FC = () => {
     recordDebtPayment, 
     deleteDebt,
     cashCloses,
-    exchangeRateBCV 
+    exchangeRateBCV,
+    orders,
+    partnerWithdrawals,
+    recordPartnerWithdrawal,
+    getMonthlyFinancialSummary,
+    availableFinancialMonths
   } = useStore();
 
-  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'cash_box' | 'debts' | 'transactions' | 'closes'>('overview');
+  const [activeSubTab, setActiveSubTab] = useState<'overview' | 'financial_split' | 'cash_box' | 'debts' | 'transactions' | 'closes'>('financial_split');
 
   // Manual Adjust Modal
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
@@ -92,6 +107,18 @@ export const TreasuryManager: React.FC = () => {
     5: 0,
     1: 0,
   });
+
+  // Financial Percentage Split State (Reglas 40% - 30% - 15% - 10% - 5%)
+  const [selectedFinancialMonth, setSelectedFinancialMonth] = useState<string>(() => {
+    return new Date().toISOString().slice(0, 7);
+  });
+  const [withdrawalModalOpen, setWithdrawalModalOpen] = useState(false);
+  const [withdrawalPartner, setWithdrawalPartner] = useState<'Andres' | 'Valeria' | 'Ambos'>('Andres');
+  const [withdrawalAmountInput, setWithdrawalAmountInput] = useState('');
+  const [withdrawalAccount, setWithdrawalAccount] = useState<'binance_usdt' | 'banco_del_tesoro_ves' | 'efectivo_usd' | 'efectivo_ves'>('binance_usdt');
+  const [withdrawalNotes, setWithdrawalNotes] = useState('');
+
+  const currentFinancialSummary = getMonthlyFinancialSummary(selectedFinancialMonth);
 
   // Filters
   const [txFilterAccount, setTxFilterAccount] = useState<string>('todas');
@@ -254,6 +281,49 @@ export const TreasuryManager: React.FC = () => {
     setPaymentAmountUSD('');
   };
 
+  // Submit Partner Salary Withdrawal (Cierre / Retiro de Sueldos)
+  const handleSavePartnerWithdrawal = (e: React.FormEvent) => {
+    e.preventDefault();
+    const amount = parseFloat(withdrawalAmountInput);
+    if (isNaN(amount) || amount <= 0) {
+      alert('Por favor ingresa un monto válido mayor a $0.');
+      return;
+    }
+
+    const maxAvailable = withdrawalPartner === 'Andres' 
+      ? currentFinancialSummary.balanceAvailableAndresUSD
+      : withdrawalPartner === 'Valeria'
+      ? currentFinancialSummary.balanceAvailableValeriaUSD
+      : currentFinancialSummary.balanceAvailableAndresUSD + currentFinancialSummary.balanceAvailableValeriaUSD;
+
+    if (amount > maxAvailable + 0.01) {
+      const confirmExceed = window.confirm(
+        `El monto ingresado ($${amount.toFixed(2)} USD) supera el saldo disponible actual ($${maxAvailable.toFixed(2)} USD) para ${withdrawalPartner}. ¿Deseas procesar el retiro como anticipo de sueldo?`
+      );
+      if (!confirmExceed) return;
+    }
+
+    recordPartnerWithdrawal({
+      partner: withdrawalPartner,
+      amountUSD: amount,
+      account: withdrawalAccount,
+      notes: withdrawalNotes,
+      registeredBy: 'Administrador',
+    });
+
+    const accountNames = {
+      binance_usdt: 'Binance Pay (USDT)',
+      banco_del_tesoro_ves: 'Banco del Tesoro (Bs.)',
+      efectivo_usd: 'Caja Efectivo ($ USD)',
+      efectivo_ves: 'Caja Efectivo (Bs.)',
+    };
+
+    showToast(`¡Cierre / Retiro de $${amount.toFixed(2)} USD procesado con éxito para ${withdrawalPartner} (${accountNames[withdrawalAccount]})!`);
+    setWithdrawalModalOpen(false);
+    setWithdrawalAmountInput('');
+    setWithdrawalNotes('');
+  };
+
   // Filtered Transactions
   const filteredTxs = transactions.filter((t) => {
     if (txFilterAccount !== 'todas' && t.account !== txFilterAccount) return false;
@@ -306,6 +376,18 @@ export const TreasuryManager: React.FC = () => {
 
           {/* Quick Action Buttons */}
           <div className="flex flex-wrap items-center gap-2.5">
+            <button
+              onClick={() => {
+                setWithdrawalPartner('Ambos');
+                setWithdrawalAmountInput('');
+                setWithdrawalModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg"
+            >
+              <Users size={14} />
+              <span>Cierre / Retiro de Sueldos</span>
+            </button>
+
             <button
               onClick={() => {
                 setExchangeModalOpen(true);
@@ -546,6 +628,18 @@ export const TreasuryManager: React.FC = () => {
       {/* SUB-TABS NAVIGATION */}
       <div className="flex items-center gap-2 border-b border-neutral-800 pb-2 overflow-x-auto">
         <button
+          onClick={() => setActiveSubTab('financial_split')}
+          className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap ${
+            activeSubTab === 'financial_split'
+              ? 'bg-amber-400 text-black shadow-lg font-black border border-amber-300'
+              : 'text-amber-400 hover:text-white bg-amber-400/10 border border-amber-400/20'
+          }`}
+        >
+          <PieChart size={14} />
+          <span>Control Financiero (%)</span>
+        </button>
+
+        <button
           onClick={() => setActiveSubTab('overview')}
           className={`px-4 py-2 rounded-xl text-xs font-bold uppercase tracking-wider transition-all cursor-pointer whitespace-nowrap ${
             activeSubTab === 'overview'
@@ -601,6 +695,555 @@ export const TreasuryManager: React.FC = () => {
           Cierres de Caja ({cashCloses.length})
         </button>
       </div>
+
+      {/* ========================================================== */}
+      {/* SECTION: CONTROL FINANCIERO POR PORCENTAJES (100% PEDIDOS) */}
+      {/* ========================================================== */}
+      {activeSubTab === 'financial_split' && (
+        <div className="space-y-8 animate-in fade-in duration-200">
+          
+          {/* Top Period Selector & Action Bar */}
+          <div className="p-5 sm:p-6 rounded-3xl bg-neutral-900/90 border border-neutral-800 shadow-xl flex flex-col md:flex-row md:items-center justify-between gap-5">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="p-1.5 rounded-lg bg-amber-400/20 text-amber-400 border border-amber-400/30">
+                  <PieChart size={18} />
+                </span>
+                <h3 className="text-lg sm:text-xl font-black text-white uppercase tracking-tight font-brand-heading">
+                  Distribución Financiera del 100% de Pedidos
+                </h3>
+              </div>
+              <p className="text-xs text-neutral-400 max-w-2xl leading-relaxed">
+                Cada pedido registrado se divide matemáticamente en tiempo real: <strong className="text-blue-400">40% Insumos/Operación</strong>, <strong className="text-emerald-400">30% Sueldo de Socios (15% Andrés y 15% Valeria)</strong>, <strong className="text-amber-400">15% Equipos</strong>, <strong className="text-purple-400">10% Ahorro Devaluación</strong> y <strong className="text-rose-400">5% Donativos</strong>.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Month Selector */}
+              <div className="flex items-center gap-2 bg-neutral-950 border border-neutral-750 px-3 py-2 rounded-xl">
+                <Calendar size={14} className="text-amber-400 shrink-0" />
+                <label className="text-[10px] font-mono text-neutral-400 uppercase font-bold">Mes:</label>
+                <select
+                  value={selectedFinancialMonth}
+                  onChange={(e) => setSelectedFinancialMonth(e.target.value)}
+                  className="bg-transparent text-amber-400 text-xs font-bold font-mono focus:outline-none cursor-pointer"
+                >
+                  {availableFinancialMonths.map((m) => (
+                    <option key={m.key} value={m.key} className="bg-neutral-900 text-white">
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Action Button: Cierre / Retiro de Sueldos */}
+              <button
+                type="button"
+                onClick={() => {
+                  setWithdrawalPartner('Ambos');
+                  setWithdrawalAmountInput('');
+                  setWithdrawalModalOpen(true);
+                }}
+                className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-gradient-to-r from-emerald-500 via-teal-400 to-emerald-400 hover:from-emerald-400 hover:to-teal-300 text-black text-xs font-black uppercase tracking-wider transition-all shadow-xl hover:scale-[1.02] cursor-pointer"
+              >
+                <Users size={16} />
+                <span>Cierre / Retiro de Sueldos</span>
+              </button>
+            </div>
+          </div>
+
+          {/* Period Grand Summary Pill */}
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div className="p-4 rounded-2xl bg-neutral-900/60 border border-neutral-800">
+              <span className="text-[10px] font-mono uppercase text-neutral-400 font-bold block">
+                Total Facturado en Pedidos ({currentFinancialSummary.monthLabel})
+              </span>
+              <span className="text-2xl font-black text-white font-mono mt-1 block">
+                ${currentFinancialSummary.totalOrdersRevenueUSD.toFixed(2)} <span className="text-xs text-neutral-400 font-normal">USD</span>
+              </span>
+              <span className="text-xs text-neutral-400 font-mono mt-0.5 block">
+                ~ Bs. {currentFinancialSummary.totalOrdersRevenueVES.toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-neutral-900/60 border border-neutral-800">
+              <span className="text-[10px] font-mono uppercase text-neutral-400 font-bold block">
+                Pedidos Registrados en el Periodo
+              </span>
+              <span className="text-2xl font-black text-amber-400 font-mono mt-1 block">
+                {currentFinancialSummary.ordersCount} <span className="text-xs text-neutral-400 font-normal">pedidos activos</span>
+              </span>
+              <span className="text-xs text-neutral-400 font-mono mt-0.5 block">
+                Tasa BCV Referencia: Bs. {exchangeRateBCV.toFixed(2)}/$
+              </span>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-emerald-950/40 border border-emerald-800/60">
+              <span className="text-[10px] font-mono uppercase text-emerald-300 font-bold block">
+                Saldo Total Disponible Socios (Sin Retirar)
+              </span>
+              <span className="text-2xl font-black text-emerald-400 font-mono mt-1 block">
+                ${(currentFinancialSummary.balanceAvailableAndresUSD + currentFinancialSummary.balanceAvailableValeriaUSD).toFixed(2)} <span className="text-xs text-neutral-400 font-normal">USD</span>
+              </span>
+              <span className="text-xs text-emerald-300/80 font-mono mt-0.5 block">
+                Andrés: ${currentFinancialSummary.balanceAvailableAndresUSD.toFixed(2)} • Valeria: ${currentFinancialSummary.balanceAvailableValeriaUSD.toFixed(2)}
+              </span>
+            </div>
+          </div>
+
+          {/* 100% Visual Proportional Distribution Bar */}
+          <div className="p-5 rounded-2xl bg-neutral-950 border border-neutral-800 space-y-3">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-neutral-400 uppercase font-bold flex items-center gap-1.5">
+                <Percent size={14} className="text-amber-400" />
+                Distribución Proporcional Automática (100%):
+              </span>
+              <span className="text-amber-400 font-bold">Total: 100.0%</span>
+            </div>
+
+            <div className="w-full h-6 rounded-xl overflow-hidden flex bg-neutral-900 border border-neutral-800">
+              <div style={{ width: '40%' }} className="bg-blue-600 h-full flex items-center justify-center text-[10px] font-mono font-bold text-white transition-all" title="Insumos y Operación (40%)">
+                40%
+              </div>
+              <div style={{ width: '15%' }} className="bg-emerald-500 h-full flex items-center justify-center text-[10px] font-mono font-bold text-black transition-all" title="Sueldo Andrés (15%)">
+                15%
+              </div>
+              <div style={{ width: '15%' }} className="bg-teal-400 h-full flex items-center justify-center text-[10px] font-mono font-bold text-black transition-all" title="Sueldo Valeria (15%)">
+                15%
+              </div>
+              <div style={{ width: '15%' }} className="bg-amber-500 h-full flex items-center justify-center text-[10px] font-mono font-bold text-black transition-all" title="Equipos y Herramientas (15%)">
+                15%
+              </div>
+              <div style={{ width: '10%' }} className="bg-purple-600 h-full flex items-center justify-center text-[10px] font-mono font-bold text-white transition-all" title="Reserva / Ahorro (10%)">
+                10%
+              </div>
+              <div style={{ width: '5%' }} className="bg-rose-500 h-full flex items-center justify-center text-[9px] font-mono font-bold text-white transition-all" title="Donativos y Marca (5%)">
+                5%
+              </div>
+            </div>
+
+            {/* Legend Chips */}
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2 pt-2">
+              <div className="flex items-center gap-1.5 p-2 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
+                <span className="w-2.5 h-2.5 rounded-sm bg-blue-600 shrink-0"></span>
+                <span className="text-neutral-300 truncate">40% Insumos</span>
+                <span className="text-white font-bold ml-auto">${currentFinancialSummary.insumosOperacionAccumulatedUSD.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 p-2 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
+                <span className="w-2.5 h-2.5 rounded-sm bg-emerald-500 shrink-0"></span>
+                <span className="text-neutral-300 truncate">15% Andrés</span>
+                <span className="text-white font-bold ml-auto">${currentFinancialSummary.sueldoAndresAccumulatedUSD.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 p-2 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
+                <span className="w-2.5 h-2.5 rounded-sm bg-teal-400 shrink-0"></span>
+                <span className="text-neutral-300 truncate">15% Valeria</span>
+                <span className="text-white font-bold ml-auto">${currentFinancialSummary.sueldoValeriaAccumulatedUSD.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 p-2 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
+                <span className="w-2.5 h-2.5 rounded-sm bg-amber-500 shrink-0"></span>
+                <span className="text-neutral-300 truncate">15% Equipos</span>
+                <span className="text-white font-bold ml-auto">${currentFinancialSummary.equiposHerramientasAccumulatedUSD.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 p-2 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
+                <span className="w-2.5 h-2.5 rounded-sm bg-purple-600 shrink-0"></span>
+                <span className="text-neutral-300 truncate">10% Ahorro</span>
+                <span className="text-white font-bold ml-auto">${currentFinancialSummary.reservaAhorroAccumulatedUSD.toFixed(2)}</span>
+              </div>
+              <div className="flex items-center gap-1.5 p-2 rounded-lg bg-neutral-900 border border-neutral-800 text-[11px] font-mono">
+                <span className="w-2.5 h-2.5 rounded-sm bg-rose-500 shrink-0"></span>
+                <span className="text-neutral-300 truncate">5% Donativos</span>
+                <span className="text-white font-bold ml-auto">${currentFinancialSummary.donativosMarcaAccumulatedUSD.toFixed(2)}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* 6 Real-Time Category Cards Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+            
+            {/* 1. INSUMOS Y OPERACIÓN (40%) */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-neutral-900 to-blue-950/20 border border-blue-500/30 shadow-xl flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-blue-400">
+                    <Package size={15} />
+                    1. Insumos y Operación (40%)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-blue-500/10 text-blue-300 font-mono text-[10px] font-bold border border-blue-500/30">
+                    40.0%
+                  </span>
+                </div>
+                <div className="mt-3">
+                  <span className="text-3xl font-black text-white font-mono block">
+                    ${currentFinancialSummary.insumosOperacionAccumulatedUSD.toFixed(2)} <span className="text-xs text-neutral-400 font-normal">USD</span>
+                  </span>
+                  <span className="text-xs text-neutral-400 font-mono mt-0.5 block">
+                    ~ Bs. {(currentFinancialSummary.insumosOperacionAccumulatedUSD * exchangeRateBCV).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-400 mt-3 leading-relaxed">
+                  Fondo reservado para compra de franelas 100% algodón pesado 240g, vinil y film DTF textil, tintas, tote bags, láminas, empaques y envíos.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">
+                <span>Destino: Proveedores y Taller</span>
+                <span className="text-blue-400 font-bold">Activo</span>
+              </div>
+            </div>
+
+            {/* 2. SUELDO SOCIO: ANDRÉS (15%) */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-neutral-900 to-emerald-950/30 border border-emerald-500/40 shadow-xl flex flex-col justify-between relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-emerald-500/5 rounded-full blur-2xl pointer-events-none"></div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-emerald-400">
+                    <Users size={15} />
+                    2. Sueldo Andrés (15%)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-300 font-mono text-[10px] font-bold border border-emerald-500/30">
+                    50% de Socios
+                  </span>
+                </div>
+                <div className="mt-3">
+                  <span className="text-xs text-neutral-400 font-mono block">Generado en el periodo:</span>
+                  <span className="text-2xl font-black text-white font-mono block">
+                    ${currentFinancialSummary.sueldoAndresAccumulatedUSD.toFixed(2)} <span className="text-xs text-neutral-400 font-normal">USD</span>
+                  </span>
+                  <div className="mt-2 p-2.5 rounded-xl bg-emerald-950/60 border border-emerald-800/80">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-neutral-400">Retirado:</span>
+                      <span className="text-neutral-300">${currentFinancialSummary.withdrawnAndresUSD.toFixed(2)} USD</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-mono font-bold mt-1 pt-1 border-t border-emerald-800/60">
+                      <span className="text-emerald-300">Saldo Disponible:</span>
+                      <span className="text-emerald-400 text-sm font-black">${currentFinancialSummary.balanceAvailableAndresUSD.toFixed(2)} USD</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWithdrawalPartner('Andres');
+                    setWithdrawalAmountInput(currentFinancialSummary.balanceAvailableAndresUSD > 0 ? currentFinancialSummary.balanceAvailableAndresUSD.toString() : '');
+                    setWithdrawalModalOpen(true);
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <DollarSign size={13} />
+                  <span>Retirar Sueldo Andrés</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 3. SUELDO SOCIA: VALERIA (15%) */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-neutral-900 to-teal-950/30 border border-teal-500/40 shadow-xl flex flex-col justify-between relative overflow-hidden">
+              <div className="absolute top-0 right-0 w-24 h-24 bg-teal-500/5 rounded-full blur-2xl pointer-events-none"></div>
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-teal-300">
+                    <Users size={15} />
+                    3. Sueldo Valeria (15%)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-teal-500/10 text-teal-300 font-mono text-[10px] font-bold border border-teal-500/30">
+                    50% de Socios
+                  </span>
+                </div>
+                <div className="mt-3">
+                  <span className="text-xs text-neutral-400 font-mono block">Generado en el periodo:</span>
+                  <span className="text-2xl font-black text-white font-mono block">
+                    ${currentFinancialSummary.sueldoValeriaAccumulatedUSD.toFixed(2)} <span className="text-xs text-neutral-400 font-normal">USD</span>
+                  </span>
+                  <div className="mt-2 p-2.5 rounded-xl bg-teal-950/60 border border-teal-800/80">
+                    <div className="flex items-center justify-between text-xs font-mono">
+                      <span className="text-neutral-400">Retirado:</span>
+                      <span className="text-neutral-300">${currentFinancialSummary.withdrawnValeriaUSD.toFixed(2)} USD</span>
+                    </div>
+                    <div className="flex items-center justify-between text-xs font-mono font-bold mt-1 pt-1 border-t border-teal-800/60">
+                      <span className="text-teal-300">Saldo Disponible:</span>
+                      <span className="text-teal-300 text-sm font-black">${currentFinancialSummary.balanceAvailableValeriaUSD.toFixed(2)} USD</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+              <div className="mt-4 pt-3 border-t border-neutral-800 flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setWithdrawalPartner('Valeria');
+                    setWithdrawalAmountInput(currentFinancialSummary.balanceAvailableValeriaUSD > 0 ? currentFinancialSummary.balanceAvailableValeriaUSD.toString() : '');
+                    setWithdrawalModalOpen(true);
+                  }}
+                  className="w-full py-2 px-3 rounded-xl bg-teal-400 hover:bg-teal-300 text-black text-xs font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1 cursor-pointer"
+                >
+                  <DollarSign size={13} />
+                  <span>Retirar Sueldo Valeria</span>
+                </button>
+              </div>
+            </div>
+
+            {/* 4. EQUIPOS Y HERRAMIENTAS (15%) */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-neutral-900 to-amber-950/20 border border-amber-500/30 shadow-xl flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-amber-400">
+                    <Wrench size={15} />
+                    4. Equipos y Herramientas (15%)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-300 font-mono text-[10px] font-bold border border-amber-500/30">
+                    15.0%
+                  </span>
+                </div>
+                <div className="mt-3">
+                  <span className="text-3xl font-black text-white font-mono block">
+                    ${currentFinancialSummary.equiposHerramientasAccumulatedUSD.toFixed(2)} <span className="text-xs text-neutral-400 font-normal">USD</span>
+                  </span>
+                  <span className="text-xs text-neutral-400 font-mono mt-0.5 block">
+                    ~ Bs. {(currentFinancialSummary.equiposHerramientasAccumulatedUSD * exchangeRateBCV).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-400 mt-3 leading-relaxed">
+                  Fondo acumulativo para mantenimiento preventivo de planchas térmicas de sublimación, calibración de cabezales, repuestos y renovación tecnológica de taller.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">
+                <span>Destino: Taller & Maquinaria</span>
+                <span className="text-amber-400 font-bold">Reserva de Activos</span>
+              </div>
+            </div>
+
+            {/* 5. RESERVA / AHORRO DEVALUACIÓN (10%) */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-neutral-900 to-purple-950/20 border border-purple-500/30 shadow-xl flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-purple-400">
+                    <Shield size={15} />
+                    5. Reserva / Ahorro (10%)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-300 font-mono text-[10px] font-bold border border-purple-500/30">
+                    10.0%
+                  </span>
+                </div>
+                <div className="mt-3">
+                  <span className="text-3xl font-black text-white font-mono block">
+                    ${currentFinancialSummary.reservaAhorroAccumulatedUSD.toFixed(2)} <span className="text-xs text-neutral-400 font-normal">USD</span>
+                  </span>
+                  <span className="text-xs text-neutral-400 font-mono mt-0.5 block">
+                    ~ Bs. {(currentFinancialSummary.reservaAhorroAccumulatedUSD * exchangeRateBCV).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-400 mt-3 leading-relaxed">
+                  Colchón de seguridad y contingencia ante incrementos de la tasa oficial del BCV, inflación de materias primas o emergencias operativas.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">
+                <span>Destino: Fondo de Estabilidad</span>
+                <span className="text-purple-400 font-bold">Blindaje Cambiario</span>
+              </div>
+            </div>
+
+            {/* 6. DONATIVOS Y FONDO DE LA MARCA (5%) */}
+            <div className="p-5 rounded-2xl bg-gradient-to-br from-neutral-900 to-rose-950/20 border border-rose-500/30 shadow-xl flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between">
+                  <span className="flex items-center gap-1.5 text-xs font-mono font-bold uppercase tracking-wider text-rose-400">
+                    <HeartHandshake size={15} />
+                    6. Donativos & Propósito (5%)
+                  </span>
+                  <span className="px-2 py-0.5 rounded-full bg-rose-500/10 text-rose-300 font-mono text-[10px] font-bold border border-rose-500/30">
+                    5.0%
+                  </span>
+                </div>
+                <div className="mt-3">
+                  <span className="text-3xl font-black text-white font-mono block">
+                    ${currentFinancialSummary.donativosMarcaAccumulatedUSD.toFixed(2)} <span className="text-xs text-neutral-400 font-normal">USD</span>
+                  </span>
+                  <span className="text-xs text-neutral-400 font-mono mt-0.5 block">
+                    ~ Bs. {(currentFinancialSummary.donativosMarcaAccumulatedUSD * exchangeRateBCV).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+                <p className="text-xs text-neutral-400 mt-3 leading-relaxed">
+                  Siembra y donativos para misiones cristianas, evangelismo en calles caraqueñas, donación de prendas y apoyo comunitario bajo #DiosFueraDelTemplo.
+                </p>
+              </div>
+              <div className="mt-4 pt-3 border-t border-neutral-800 text-[11px] text-neutral-400 flex items-center justify-between">
+                <span>Destino: Misiones & Siembra</span>
+                <span className="text-rose-400 font-bold">Propósito del Reino</span>
+              </div>
+            </div>
+
+          </div>
+
+          {/* HISTORIAL DE CIERRES Y RETIROS DE SUELDOS */}
+          <div className="p-6 rounded-3xl bg-neutral-950 border border-neutral-800 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-800">
+              <div>
+                <h4 className="text-base font-black text-white uppercase tracking-tight font-brand-heading flex items-center gap-2">
+                  <UserCheck size={18} className="text-emerald-400" />
+                  Historial de Cierres y Retiros de Sueldos de Socios
+                </h4>
+                <p className="text-xs text-neutral-400">
+                  Registro cronológico de los desembolsos de sueldos para Andrés y Valeria
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setWithdrawalPartner('Ambos');
+                  setWithdrawalAmountInput('');
+                  setWithdrawalModalOpen(true);
+                }}
+                className="px-4 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-850 text-amber-400 border border-neutral-750 text-xs font-mono font-bold flex items-center gap-1.5 cursor-pointer self-start sm:self-auto"
+              >
+                <Plus size={14} />
+                <span>Registrar Nuevo Retiro</span>
+              </button>
+            </div>
+
+            {partnerWithdrawals.length === 0 ? (
+              <div className="p-8 text-center text-neutral-500 font-mono text-xs">
+                No hay retiros de sueldos registrados todavía. Los saldos generados por cada pedido permanecen acumulados como saldo disponible.
+              </div>
+            ) : (
+              <div className="overflow-x-auto rounded-xl border border-neutral-850">
+                <table className="w-full text-left text-xs font-mono">
+                  <thead className="bg-neutral-900/90 text-neutral-400 uppercase text-[10px] border-b border-neutral-800">
+                    <tr>
+                      <th className="py-3 px-4">Fecha</th>
+                      <th className="py-3 px-4">Socio(s)</th>
+                      <th className="py-3 px-4">Monto USD</th>
+                      <th className="py-3 px-4">Equiv. Bolívares</th>
+                      <th className="py-3 px-4">Cuenta Desembolso</th>
+                      <th className="py-3 px-4">Concepto / Notas</th>
+                      <th className="py-3 px-4">Registrado Por</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-neutral-850/80">
+                    {partnerWithdrawals.map((w) => (
+                      <tr key={w.id} className="hover:bg-neutral-900/40">
+                        <td className="py-3 px-4 text-neutral-400">
+                          {new Date(w.date).toLocaleDateString('es-VE', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </td>
+                        <td className="py-3 px-4">
+                          <span className={`px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                            w.partner === 'Andres'
+                              ? 'bg-emerald-950 text-emerald-300 border border-emerald-800'
+                              : w.partner === 'Valeria'
+                              ? 'bg-teal-950 text-teal-300 border border-teal-800'
+                              : 'bg-amber-950 text-amber-300 border border-amber-800'
+                          }`}>
+                            {w.partner === 'Ambos' ? 'Andrés & Valeria (50/50)' : w.partner}
+                          </span>
+                        </td>
+                        <td className="py-3 px-4 font-bold text-white">
+                          ${w.amountUSD.toFixed(2)} USD
+                        </td>
+                        <td className="py-3 px-4 text-neutral-400">
+                          Bs. {(w.amountVES || (w.amountUSD * exchangeRateBCV)).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </td>
+                        <td className="py-3 px-4 text-neutral-300">
+                          {w.account === 'binance_usdt' ? 'Binance Pay (USDT)' :
+                           w.account === 'banco_del_tesoro_ves' ? 'Banco del Tesoro (Bs.)' :
+                           w.account === 'efectivo_usd' ? 'Caja Efectivo ($ USD)' : 'Caja Efectivo (Bs.)'}
+                        </td>
+                        <td className="py-3 px-4 text-neutral-400 max-w-xs truncate" title={w.notes || w.concept}>
+                          {w.notes || w.concept}
+                        </td>
+                        <td className="py-3 px-4 text-neutral-500">
+                          {w.registeredBy || 'Admin'}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* AUDITORÍA DETALLADA: DESGLOSE POR PEDIDO EN EL PERIODO */}
+          <div className="p-6 rounded-3xl bg-neutral-950 border border-neutral-800 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-neutral-800">
+              <div>
+                <h4 className="text-base font-black text-white uppercase tracking-tight font-brand-heading flex items-center gap-2">
+                  <FileText size={18} className="text-amber-400" />
+                  Auditoría por Pedido: Distribución 100% ({currentFinancialSummary.monthLabel})
+                </h4>
+                <p className="text-xs text-neutral-400">
+                  Desglose matemático individual calculado sobre cada pedido registrado
+                </p>
+              </div>
+              <span className="text-xs text-neutral-400 font-mono">
+                {orders.filter(o => o.status !== 'cancelado' && (selectedFinancialMonth === 'historico' || (o.createdAt && o.createdAt.startsWith(selectedFinancialMonth)))).length} pedidos en este periodo
+              </span>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-neutral-850">
+              <table className="w-full text-left text-xs font-mono">
+                <thead className="bg-neutral-900/90 text-neutral-400 uppercase text-[10px] border-b border-neutral-800">
+                  <tr>
+                    <th className="py-3 px-3">Pedido</th>
+                    <th className="py-3 px-3">Cliente</th>
+                    <th className="py-3 px-3 text-right">Total (100%)</th>
+                    <th className="py-3 px-3 text-right text-blue-400">Insumos (40%)</th>
+                    <th className="py-3 px-3 text-right text-emerald-400">Andrés (15%)</th>
+                    <th className="py-3 px-3 text-right text-teal-400">Valeria (15%)</th>
+                    <th className="py-3 px-3 text-right text-amber-400">Equipos (15%)</th>
+                    <th className="py-3 px-3 text-right text-purple-400">Ahorro (10%)</th>
+                    <th className="py-3 px-3 text-right text-rose-400">Donativo (5%)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-neutral-850/80">
+                  {orders
+                    .filter(o => o.status !== 'cancelado' && (selectedFinancialMonth === 'historico' || (o.createdAt && o.createdAt.startsWith(selectedFinancialMonth))))
+                    .map((ord) => {
+                      const total = Number(ord.totalUSD) || 0;
+                      const split = ord.financialSplit || {
+                        insumosOperacionUSD: total * 0.40,
+                        sueldoAndresUSD: total * 0.15,
+                        sueldoValeriaUSD: total * 0.15,
+                        equiposHerramientasUSD: total * 0.15,
+                        reservaAhorroUSD: total * 0.10,
+                        donativosMarcaUSD: total * 0.05,
+                      };
+                      return (
+                        <tr key={ord.orderCode} className="hover:bg-neutral-900/40">
+                          <td className="py-3 px-3 font-bold text-amber-400">
+                            {ord.orderCode}
+                          </td>
+                          <td className="py-3 px-3 text-neutral-300 truncate max-w-[140px]" title={ord.customerName}>
+                            {ord.customerName}
+                          </td>
+                          <td className="py-3 px-3 text-right font-black text-white">
+                            ${total.toFixed(2)}
+                          </td>
+                          <td className="py-3 px-3 text-right text-blue-300">
+                            ${split.insumosOperacionUSD.toFixed(2)}
+                          </td>
+                          <td className="py-3 px-3 text-right text-emerald-300 font-bold">
+                            ${split.sueldoAndresUSD.toFixed(2)}
+                          </td>
+                          <td className="py-3 px-3 text-right text-teal-300 font-bold">
+                            ${split.sueldoValeriaUSD.toFixed(2)}
+                          </td>
+                          <td className="py-3 px-3 text-right text-amber-300">
+                            ${split.equiposHerramientasUSD.toFixed(2)}
+                          </td>
+                          <td className="py-3 px-3 text-right text-purple-300">
+                            ${split.reservaAhorroUSD.toFixed(2)}
+                          </td>
+                          <td className="py-3 px-3 text-right text-rose-300">
+                            ${split.donativosMarcaUSD.toFixed(2)}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+        </div>
+      )}
 
       {/* ========================================================== */}
       {/* SECTION 1: OVERVIEW & MOVIMIENTOS RECIENTES               */}
@@ -1701,6 +2344,252 @@ export const TreasuryManager: React.FC = () => {
                   className="px-5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black uppercase tracking-wider"
                 >
                   Registrar Abono y Acreditar Cuenta
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================== */}
+      {/* MODAL 5: CIERRE / RETIRO DE SUELDO DE SOCIOS               */}
+      {/* ========================================================== */}
+      {withdrawalModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+          <div className="w-full max-w-lg bg-neutral-950 border border-neutral-800 rounded-3xl p-6 shadow-2xl space-y-5 animate-in fade-in zoom-in-95 duration-150">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2">
+                <span className="p-2 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
+                  <DollarSign size={18} />
+                </span>
+                <div>
+                  <h3 className="text-base font-black text-white uppercase tracking-tight font-brand-heading">
+                    Cierre / Retiro de Sueldos de Socios
+                  </h3>
+                  <p className="text-[11px] text-neutral-400">
+                    Desembolsa fondos del 30% asignado a Andrés y Valeria (50/50)
+                  </p>
+                </div>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setWithdrawalModalOpen(false)} 
+                className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-900 transition-all cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePartnerWithdrawal} className="space-y-4">
+              {/* Selector de Socio */}
+              <div>
+                <label className="text-xs font-mono font-bold uppercase text-neutral-300 block mb-2">
+                  1. Seleccionar Socio Destinatario:
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWithdrawalPartner('Andres');
+                      if (currentFinancialSummary.balanceAvailableAndresUSD > 0) {
+                        setWithdrawalAmountInput(currentFinancialSummary.balanceAvailableAndresUSD.toFixed(2));
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                      withdrawalPartner === 'Andres'
+                        ? 'bg-emerald-950/80 border-emerald-500 text-white shadow-lg shadow-emerald-950/40'
+                        : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                    }`}
+                  >
+                    <span className="text-[10px] font-mono uppercase block font-bold text-emerald-400">15% Sueldo</span>
+                    <span className="text-sm font-black block mt-0.5">Andrés</span>
+                    <span className="text-[11px] font-mono text-neutral-400 mt-1 block">
+                      Disp: <strong className="text-white">${currentFinancialSummary.balanceAvailableAndresUSD.toFixed(2)}</strong>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWithdrawalPartner('Valeria');
+                      if (currentFinancialSummary.balanceAvailableValeriaUSD > 0) {
+                        setWithdrawalAmountInput(currentFinancialSummary.balanceAvailableValeriaUSD.toFixed(2));
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                      withdrawalPartner === 'Valeria'
+                        ? 'bg-teal-950/80 border-teal-400 text-white shadow-lg shadow-teal-950/40'
+                        : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                    }`}
+                  >
+                    <span className="text-[10px] font-mono uppercase block font-bold text-teal-300">15% Sueldo</span>
+                    <span className="text-sm font-black block mt-0.5">Valeria</span>
+                    <span className="text-[11px] font-mono text-neutral-400 mt-1 block">
+                      Disp: <strong className="text-white">${currentFinancialSummary.balanceAvailableValeriaUSD.toFixed(2)}</strong>
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setWithdrawalPartner('Ambos');
+                      const totalBoth = currentFinancialSummary.balanceAvailableAndresUSD + currentFinancialSummary.balanceAvailableValeriaUSD;
+                      if (totalBoth > 0) {
+                        setWithdrawalAmountInput(totalBoth.toFixed(2));
+                      }
+                    }}
+                    className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
+                      withdrawalPartner === 'Ambos'
+                        ? 'bg-amber-950/80 border-amber-400 text-white shadow-lg shadow-amber-950/40'
+                        : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                    }`}
+                  >
+                    <span className="text-[10px] font-mono uppercase block font-bold text-amber-400">30% Total</span>
+                    <span className="text-sm font-black block mt-0.5">Ambos (50/50)</span>
+                    <span className="text-[11px] font-mono text-neutral-400 mt-1 block">
+                      Disp: <strong className="text-white">${(currentFinancialSummary.balanceAvailableAndresUSD + currentFinancialSummary.balanceAvailableValeriaUSD).toFixed(2)}</strong>
+                    </span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Monto del Retiro */}
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-mono font-bold uppercase text-neutral-300">
+                    2. Monto a Retirar ($ USD): *
+                  </label>
+                  <span className="text-[11px] font-mono text-neutral-400">
+                    Saldo Disponible: <strong className="text-emerald-400">
+                      ${(withdrawalPartner === 'Andres' 
+                        ? currentFinancialSummary.balanceAvailableAndresUSD 
+                        : withdrawalPartner === 'Valeria' 
+                        ? currentFinancialSummary.balanceAvailableValeriaUSD 
+                        : (currentFinancialSummary.balanceAvailableAndresUSD + currentFinancialSummary.balanceAvailableValeriaUSD)
+                      ).toFixed(2)} USD
+                    </strong>
+                  </span>
+                </div>
+
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 font-mono text-base font-bold text-amber-400">$</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    required
+                    placeholder="0.00"
+                    value={withdrawalAmountInput}
+                    onChange={(e) => setWithdrawalAmountInput(e.target.value)}
+                    className="w-full pl-8 pr-4 py-3 bg-neutral-900 border border-neutral-800 rounded-2xl text-base font-mono font-bold text-white focus:border-amber-400 focus:outline-none"
+                  />
+                </div>
+
+                {/* Botones de Monto Rápido */}
+                <div className="flex flex-wrap items-center gap-1.5 mt-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const max = withdrawalPartner === 'Andres' 
+                        ? currentFinancialSummary.balanceAvailableAndresUSD 
+                        : withdrawalPartner === 'Valeria' 
+                        ? currentFinancialSummary.balanceAvailableValeriaUSD 
+                        : (currentFinancialSummary.balanceAvailableAndresUSD + currentFinancialSummary.balanceAvailableValeriaUSD);
+                      setWithdrawalAmountInput(max > 0 ? max.toFixed(2) : '0');
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] font-mono font-bold text-amber-400 transition-all cursor-pointer"
+                  >
+                    Todo el Disponible
+                  </button>
+                  {['20', '50', '100', '150', '200'].map((amt) => (
+                    <button
+                      key={amt}
+                      type="button"
+                      onClick={() => setWithdrawalAmountInput(amt)}
+                      className="px-2.5 py-1 rounded-lg bg-neutral-900 hover:bg-neutral-800 border border-neutral-800 text-[11px] font-mono text-neutral-300 hover:text-white transition-all cursor-pointer"
+                    >
+                      ${amt}
+                    </button>
+                  ))}
+                  <span className="text-[11px] font-mono text-neutral-400 ml-auto">
+                    ~ Bs. {((parseFloat(withdrawalAmountInput) || 0) * exchangeRateBCV).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  </span>
+                </div>
+              </div>
+
+              {/* Cuenta de Origen del Desembolso */}
+              <div>
+                <label className="text-xs font-mono font-bold uppercase text-neutral-300 block mb-1.5">
+                  3. Cuenta de Tesorería donde se Desembolsan los Fondos: *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {[
+                    { key: 'binance_usdt', label: 'Binance Pay (USDT)', bal: `${treasuryAccounts.binanceUSDT.toFixed(2)} USDT` },
+                    { key: 'efectivo_usd', label: 'Caja Efectivo USD (Físico)', bal: `$${treasuryAccounts.efectivoUSD.toFixed(2)} USD` },
+                    { key: 'banco_del_tesoro_ves', label: 'Banco del Tesoro (Bs.)', bal: `Bs. ${treasuryAccounts.bancoDelTesoroVES.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` },
+                    { key: 'efectivo_ves', label: 'Caja Efectivo Bs. (Billetes)', bal: `Bs. ${treasuryAccounts.efectivoVES.toLocaleString('es-VE', { minimumFractionDigits: 2 })}` },
+                  ].map((acc) => (
+                    <button
+                      key={acc.key}
+                      type="button"
+                      onClick={() => setWithdrawalAccount(acc.key as any)}
+                      className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                        withdrawalAccount === acc.key
+                          ? 'bg-amber-400/10 border-amber-400 text-white'
+                          : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:border-neutral-700'
+                      }`}
+                    >
+                      <span className="text-xs font-bold block text-white">{acc.label}</span>
+                      <span className="text-[10px] font-mono text-neutral-400 mt-0.5 block">Saldo en cuenta: {acc.bal}</span>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Concepto / Nota */}
+              <div>
+                <label className="text-xs font-mono font-bold uppercase text-neutral-300 block mb-1.5">
+                  4. Concepto / Motivo del Retiro:
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ej. Cierre quincenal de sueldos / Pago personal Andrés"
+                  value={withdrawalNotes}
+                  onChange={(e) => setWithdrawalNotes(e.target.value)}
+                  className="w-full p-2.5 bg-neutral-900 border border-neutral-800 rounded-xl text-xs text-white focus:border-amber-400 focus:outline-none"
+                />
+              </div>
+
+              {/* Preview de Distribución Si es Ambos */}
+              {withdrawalPartner === 'Ambos' && (
+                <div className="p-3 rounded-xl bg-amber-950/40 border border-amber-800/60 text-xs font-mono space-y-1">
+                  <span className="text-amber-400 font-bold block">Desglose 50% / 50%:</span>
+                  <div className="flex items-center justify-between text-neutral-300">
+                    <span>Andrés (50%):</span>
+                    <strong className="text-white">${((parseFloat(withdrawalAmountInput) || 0) / 2).toFixed(2)} USD</strong>
+                  </div>
+                  <div className="flex items-center justify-between text-neutral-300">
+                    <span>Valeria (50%):</span>
+                    <strong className="text-white">${((parseFloat(withdrawalAmountInput) || 0) / 2).toFixed(2)} USD</strong>
+                  </div>
+                </div>
+              )}
+
+              {/* Botones de Acción */}
+              <div className="pt-2 flex items-center justify-end gap-3 border-t border-neutral-800">
+                <button
+                  type="button"
+                  onClick={() => setWithdrawalModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-400 text-xs font-bold transition-all cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-6 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 cursor-pointer shadow-lg shadow-emerald-500/20"
+                >
+                  <DollarSign size={14} />
+                  <span>Confirmar Retiro y Desembolsar</span>
                 </button>
               </div>
             </form>

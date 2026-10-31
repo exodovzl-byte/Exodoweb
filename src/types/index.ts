@@ -114,6 +114,48 @@ export interface Order {
   paymentMethod?: 'pago_movil' | 'binance' | 'efectivo' | 'transferencia' | 'otro';
   accountCredited?: 'banco_del_tesoro_ves' | 'binance_usdt' | 'efectivo_usd' | 'efectivo_ves';
   isHistorical?: boolean;
+  financialSplit?: OrderFinancialSplit;
+}
+
+export interface OrderFinancialSplit {
+  insumosOperacionUSD: number;    // 40% Insumos y Operación (Telas, DTF, tintas, empaques)
+  sueldoAndresUSD: number;        // 15% Sueldo Andrés (50% de la bolsa del 30% de socios)
+  sueldoValeriaUSD: number;       // 15% Sueldo Valeria (50% de la bolsa del 30% de socios)
+  equiposHerramientasUSD: number; // 15% Equipos y Herramientas (Planchas, plotters, repuestos)
+  reservaAhorroUSD: number;       // 10% Reserva / Ahorro (Protección ante devaluación)
+  donativosMarcaUSD: number;      // 5%  Donativos y Fondo de la Marca (Siembra cristiana y misiones)
+  totalUSD: number;
+  calculatedAt: string;
+}
+
+export interface PartnerSalaryWithdrawal {
+  id: string;
+  partner: 'Andres' | 'Valeria' | 'Ambos';
+  amountUSD: number;
+  amountVES?: number;
+  account: 'binance_usdt' | 'banco_del_tesoro_ves' | 'efectivo_usd' | 'efectivo_ves';
+  date: string;
+  concept: string;
+  registeredBy: string;
+  notes?: string;
+}
+
+export interface MonthlyFinancialSummary {
+  monthKey: string; // e.g. "2026-10" or "historico"
+  monthLabel: string; // e.g. "Octubre 2026"
+  totalOrdersRevenueUSD: number;
+  totalOrdersRevenueVES: number;
+  ordersCount: number;
+  insumosOperacionAccumulatedUSD: number; // 40%
+  sueldoAndresAccumulatedUSD: number;    // 15%
+  sueldoValeriaAccumulatedUSD: number;   // 15%
+  equiposHerramientasAccumulatedUSD: number; // 15%
+  reservaAhorroAccumulatedUSD: number;   // 10%
+  donativosMarcaAccumulatedUSD: number;  // 5%
+  withdrawnAndresUSD: number;
+  withdrawnValeriaUSD: number;
+  balanceAvailableAndresUSD: number;
+  balanceAvailableValeriaUSD: number;
 }
 
 export interface TreasuryAccounts {
@@ -131,7 +173,7 @@ export interface CashTransaction {
   amount: number; // in currency of account
   amountUSD?: number;
   concept: string;
-  category: 'pedido' | 'retiro' | 'proveedor' | 'gasto_operativo' | 'abono_deuda' | 'ajuste_manual' | 'compra_venta_efectivo' | 'otro';
+  category: 'pedido' | 'retiro' | 'retiro_socios' | 'proveedor' | 'gasto_operativo' | 'abono_deuda' | 'ajuste_manual' | 'compra_venta_efectivo' | 'otro';
   date: string;
   relatedOrderCode?: string;
   registeredBy?: string;

@@ -9,7 +9,8 @@ import {
   HeroSlide, 
   Order, 
   AboutContent, 
-  SocialLinks 
+  SocialLinks,
+  PartnerSalaryWithdrawal 
 } from '../types';
 
 export interface StoreCloudState {
@@ -21,6 +22,7 @@ export interface StoreCloudState {
   heroSlides?: HeroSlide[];
   collections?: string[];
   orders?: Order[];
+  partnerWithdrawals?: PartnerSalaryWithdrawal[];
   aboutContent?: AboutContent;
   socialLinks?: SocialLinks;
   updatedAt?: string;
@@ -73,6 +75,9 @@ export async function saveStoreDataToCloud(
     }
     if (partialData.orders) {
       localStorage.setItem('exodo_orders', JSON.stringify(partialData.orders));
+    }
+    if (partialData.partnerWithdrawals) {
+      localStorage.setItem('exodo_partner_withdrawals', JSON.stringify(partialData.partnerWithdrawals));
     }
     localStorage.setItem(LOCAL_SYNC_TIMESTAMP_KEY, timestamp);
   } catch (e) {

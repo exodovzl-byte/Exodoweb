@@ -188,22 +188,70 @@ export const BrandAssetManager: React.FC = () => {
     }
   }, [currentAssets.appIcon]);
 
-  // Handle file reading to base64 DataURL
-  const handleFileUpload = (key: keyof BrandLogoAssets, file: File) => {
+  // Helper to optimize uploaded brand assets (max 800px, PNG with alpha, under 60KB for instant Firestore sync)
+  const optimizeImageFile = (file: File, maxDimension: number = 800): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      // If SVG and under 150KB, read directly as dataUrl to preserve vectors
+      if (file.type === 'image/svg+xml' && file.size < 150 * 1024) {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result as string);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const img = new Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxDimension || height > maxDimension) {
+            if (width > height) {
+              height = Math.round((height * maxDimension) / width);
+              width = maxDimension;
+            } else {
+              width = Math.round((width * maxDimension) / height);
+              height = maxDimension;
+            }
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(e.target?.result as string);
+            return;
+          }
+          ctx.clearRect(0, 0, width, height);
+          ctx.drawImage(img, 0, 0, width, height);
+          const optimized = canvas.toDataURL('image/png', 0.92);
+          resolve(optimized);
+        };
+        img.onerror = () => resolve(e.target?.result as string);
+        img.src = e.target?.result as string;
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
+  // Handle file reading to optimized base64 DataURL
+  const handleFileUpload = async (key: keyof BrandLogoAssets, file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('Por favor selecciona un archivo de imagen válido (PNG, SVG, JPG, WEBP).');
       return;
     }
 
-    // Limit to 5MB for storage stability
-    if (file.size > 5 * 1024 * 1024) {
-      alert('La imagen no debe superar los 5MB.');
+    if (file.size > 8 * 1024 * 1024) {
+      alert('La imagen no debe superar los 8MB.');
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      const dataUrl = reader.result as string;
+    try {
+      const maxDim = (key === 'appIcon' || key === 'appIconSquare') ? 512 : 800;
+      const dataUrl = await optimizeImageFile(file, maxDim);
+
       const updatedAssets: BrandLogoAssets = {
         ...currentAssets,
         [key]: dataUrl,
@@ -211,14 +259,15 @@ export const BrandAssetManager: React.FC = () => {
 
       updateBrandConfig({
         logoAssets: updatedAssets,
-        // If uploading white or transparent logo, offer activating custom logo in UI
         activeLogoVersion: 'custom_uploaded',
         activeLogoColorVariant: key === 'logoBlack' ? 'black' : key === 'logoTransparent' ? 'transparent' : 'white',
       });
 
-      showNotification(`¡${file.name} guardado con éxito en el slot de marca!`);
-    };
-    reader.readAsDataURL(file);
+      showNotification(`¡${file.name} guardado y optimizado con éxito!`);
+    } catch (err) {
+      console.error('Error optimizando logo:', err);
+      alert('Hubo un problema al procesar la imagen.');
+    }
   };
 
   const handleRemoveAsset = (key: keyof BrandLogoAssets, title: string) => {
@@ -229,29 +278,6 @@ export const BrandAssetManager: React.FC = () => {
     updateBrandConfig({ logoAssets: updatedAssets });
     showNotification(`Asset "${title}" restablecido.`);
   };
-
-  // Automatically purge legacy/incorrect SVG kit presets if they were previously saved
-  useEffect(() => {
-    if (!brandConfig.logoAssets) return;
-    const isLegacyPreset = (val: string | null | undefined) => 
-      typeof val === 'string' && val.includes('viewBox="0 0 1000');
-
-    const hasLegacy = Object.values(brandConfig.logoAssets).some(isLegacyPreset);
-    if (hasLegacy) {
-      const sanitized: BrandLogoAssets = {
-        logoBlack: isLegacyPreset(brandConfig.logoAssets.logoBlack) ? null : brandConfig.logoAssets.logoBlack,
-        logoWhite: isLegacyPreset(brandConfig.logoAssets.logoWhite) ? null : brandConfig.logoAssets.logoWhite,
-        logoTransparent: isLegacyPreset(brandConfig.logoAssets.logoTransparent) ? null : brandConfig.logoAssets.logoTransparent,
-        appIcon: isLegacyPreset(brandConfig.logoAssets.appIcon) ? null : brandConfig.logoAssets.appIcon,
-        appIconSquare: isLegacyPreset(brandConfig.logoAssets.appIconSquare) ? null : brandConfig.logoAssets.appIconSquare,
-      };
-      updateBrandConfig({
-        logoAssets: sanitized,
-        activeLogoVersion: brandConfig.activeLogoVersion === 'custom_uploaded' ? 'emblem' : brandConfig.activeLogoVersion,
-      });
-      showNotification('Se han limpiado los datos anteriores del kit. Listo para cargar tus archivos originales.');
-    }
-  }, []);
 
   const handleClearAllAssets = () => {
     if (window.confirm('¿Deseas vaciar todos los slots y eliminar los logos guardados? Podrás subir tus archivos originales en cualquier momento.')) {

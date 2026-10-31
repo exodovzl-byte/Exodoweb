@@ -20,8 +20,33 @@ import {
   CashTransaction,
   DebtRecord,
   DailyCashClose,
-  CustomLabMockup
+  CustomLabMockup,
+  OrderFinancialSplit,
+  PartnerSalaryWithdrawal,
+  MonthlyFinancialSummary
 } from '../types';
+
+/**
+ * Reglas de distribución financiera automática del 100% sobre el valor del pedido:
+ * - 40% Insumos y Operación (Telas, DTF textil, tintas, empaques, insumos de taller)
+ * - 30% Sueldo de Socios (15% Andrés y 15% Valeria)
+ * - 15% Equipos y Herramientas (Mantenimiento, prensas, plotters, repuestos)
+ * - 10% Reserva / Ahorro (Colchón protector ante devaluación e imprevistos)
+ * - 5%  Donativos y Fondo de la Marca (Siembra cristiana, misiones y apoyo comunitario)
+ */
+export function calculateOrderFinancialSplit(totalUSD: number): OrderFinancialSplit {
+  const safeTotal = Math.max(0, Number(totalUSD) || 0);
+  return {
+    insumosOperacionUSD: Number((safeTotal * 0.40).toFixed(2)),
+    sueldoAndresUSD: Number((safeTotal * 0.15).toFixed(2)),
+    sueldoValeriaUSD: Number((safeTotal * 0.15).toFixed(2)),
+    equiposHerramientasUSD: Number((safeTotal * 0.15).toFixed(2)),
+    reservaAhorroUSD: Number((safeTotal * 0.10).toFixed(2)),
+    donativosMarcaUSD: Number((safeTotal * 0.05).toFixed(2)),
+    totalUSD: Number(safeTotal.toFixed(2)),
+    calculatedAt: new Date().toISOString(),
+  };
+}
 import { 
   INITIAL_PRODUCTS, 
   INITIAL_KANBAN_COLUMNS, 
@@ -231,6 +256,19 @@ interface StoreContextType {
   markNotificationRead: (id: string) => void;
   clearNotifications: () => void;
   sendPushNotification: (title: string, body: string) => void;
+
+  // Sistema de Control Financiero por Porcentajes (100% de Pedidos)
+  calculateOrderFinancialSplit: (totalUSD: number) => OrderFinancialSplit;
+  partnerWithdrawals: PartnerSalaryWithdrawal[];
+  recordPartnerWithdrawal: (params: {
+    partner: 'Andres' | 'Valeria' | 'Ambos';
+    amountUSD: number;
+    account: 'binance_usdt' | 'banco_del_tesoro_ves' | 'efectivo_usd' | 'efectivo_ves';
+    notes?: string;
+    registeredBy?: string;
+  }) => PartnerSalaryWithdrawal;
+  getMonthlyFinancialSummary: (monthKey?: string) => MonthlyFinancialSummary;
+  availableFinancialMonths: { key: string; label: string }[];
 
   // Cloud Sync (Real-time Cross-Device Synchronization)
   isCloudSyncing: boolean;
@@ -477,6 +515,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saved ? JSON.parse(saved) : INITIAL_CASH_CLOSES;
   });
 
+  // Partner Salary Withdrawals State (Manejo de fondos de socios Andrés y Valeria)
+  const [partnerWithdrawals, setPartnerWithdrawals] = useState<PartnerSalaryWithdrawal[]>(() => {
+    const saved = localStorage.getItem('exodo_partner_withdrawals');
+    return saved ? JSON.parse(saved) : [];
+  });
+
   // Admin Push Notifications Alert Queue
   const [adminNotifications, setAdminNotifications] = useState<{
     id: string;
@@ -535,6 +579,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (cloudData.collections) setCollections(cloudData.collections);
         if (cloudData.aboutContent) setAboutContent(cloudData.aboutContent);
         if (cloudData.socialLinks) setSocialLinks(cloudData.socialLinks);
+        if (cloudData.partnerWithdrawals && cloudData.partnerWithdrawals.length > 0) {
+          setPartnerWithdrawals(cloudData.partnerWithdrawals);
+        }
         if (cloudData.orders && cloudData.orders.length > 0) {
           setOrders((prev) => {
             const remoteMap = new Map(cloudData.orders!.map((o) => [o.orderCode, o]));
@@ -564,6 +611,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (incoming.aboutContent) setAboutContent(incoming.aboutContent);
       if (incoming.socialLinks) setSocialLinks(incoming.socialLinks);
       if (incoming.orders && incoming.orders.length > 0) setOrders(incoming.orders);
+      if (incoming.partnerWithdrawals && incoming.partnerWithdrawals.length > 0) setPartnerWithdrawals(incoming.partnerWithdrawals);
       if (incoming.updatedAt) setLastCloudSyncTimestamp(incoming.updatedAt);
     });
 
@@ -575,6 +623,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (cloudData.products && cloudData.products.length > 0) setProducts(cloudData.products);
         if (cloudData.labPricingConfig) setLabPricingConfig(cloudData.labPricingConfig);
         if (cloudData.customLabMockups) setCustomLabMockups(cloudData.customLabMockups);
+        if (cloudData.partnerWithdrawals && cloudData.partnerWithdrawals.length > 0) setPartnerWithdrawals(cloudData.partnerWithdrawals);
         if (cloudData.updatedAt) setLastCloudSyncTimestamp(cloudData.updatedAt);
       }).catch(() => {});
     };
@@ -588,6 +637,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, []);
 
   // Sync to local storage
+  useEffect(() => {
+    localStorage.setItem('exodo_partner_withdrawals', JSON.stringify(partnerWithdrawals));
+  }, [partnerWithdrawals]);
+
   useEffect(() => {
     localStorage.setItem('exodo_treasury_accounts', JSON.stringify(treasuryAccounts));
   }, [treasuryAccounts]);
@@ -667,7 +720,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     document.documentElement.style.setProperty('--accent-color', brandConfig.accentColor);
 
     // Update PWA / browser favicon & apple-touch-icon dynamically from brand config
-    const customIcon = brandConfig.logoAssets?.appIcon || brandConfig.logoAssets?.appIconSquare;
+    const customIcon = brandConfig.logoAssets?.appIcon || brandConfig.logoAssets?.appIconSquare || brandConfig.logoAssets?.logoWhite || brandConfig.logoAssets?.logoTransparent;
     if (customIcon) {
       try {
         let iconTag = document.querySelector("link[rel='icon']") as HTMLLinkElement;
@@ -864,12 +917,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Order operations
   const createOrder = (order: Order) => {
+    const financialSplit = calculateOrderFinancialSplit(order.totalUSD);
     const enrichedOrder: Order = {
       ...order,
       status: order.status || 'activo',
       paymentMethod: order.paymentMethod || (order.pagoMovilRef ? 'pago_movil' : 'efectivo'),
+      financialSplit,
     };
-    setOrders((prev) => [enrichedOrder, ...prev]);
+    setOrders((prev) => {
+      const next = [enrichedOrder, ...prev];
+      saveStoreDataToCloud({ orders: next });
+      return next;
+    });
 
     // Save to user if logged in
     if (currentUser) {
@@ -903,8 +962,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const updateOrderStatus = (orderCode: string, newStage: string) => {
     const now = new Date().toISOString();
-    setOrders((prev) =>
-      prev.map((ord) => {
+    setOrders((prev) => {
+      const next = prev.map((ord) => {
         if (ord.orderCode !== orderCode) return ord;
         const isDelivered = newStage === 'entregado';
         return {
@@ -913,8 +972,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           status: isDelivered ? 'entregado' : ord.status || 'activo',
           deliveredAt: isDelivered ? now : ord.deliveredAt,
         };
-      })
-    );
+      });
+      saveStoreDataToCloud({ orders: next });
+      return next;
+    });
 
     if (newStage === 'entregado') {
       addAdminNotification({
@@ -998,18 +1059,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const cancelOrder = (orderCode: string, reason?: string) => {
     const now = new Date().toISOString();
-    setOrders((prev) =>
-      prev.map((ord) =>
+    setOrders((prev) => {
+      const next = prev.map((ord) =>
         ord.orderCode === orderCode
           ? {
               ...ord,
-              status: 'cancelado',
+              status: 'cancelado' as const,
               cancelledAt: now,
               cancelReason: reason || 'Cancelado por solicitud del cliente/administración',
             }
           : ord
-      )
-    );
+      );
+      saveStoreDataToCloud({ orders: next });
+      return next;
+    });
     addAdminNotification({
       title: `⚠️ Pedido Cancelado: ${orderCode}`,
       message: `El pedido ${orderCode} fue marcado como CANCELADO. Motivo: ${reason || 'Sin motivo especificado'}.`,
@@ -1018,18 +1081,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateOrder = (orderCode: string, updates: Partial<Order>) => {
-    setOrders((prev) =>
-      prev.map((ord) => (ord.orderCode === orderCode ? { ...ord, ...updates } : ord))
-    );
+    setOrders((prev) => {
+      const next = prev.map((ord) => (ord.orderCode === orderCode ? { ...ord, ...updates } : ord));
+      saveStoreDataToCloud({ orders: next });
+      return next;
+    });
   };
 
   const addManualOrder = (order: Order, creditAccount: boolean = true) => {
+    const financialSplit = order.financialSplit || calculateOrderFinancialSplit(order.totalUSD);
     const enriched: Order = {
       ...order,
       isHistorical: true,
       status: order.status || (order.productionStage === 'entregado' ? 'entregado' : 'activo'),
+      financialSplit,
     };
-    setOrders((prev) => [enriched, ...prev]);
+    setOrders((prev) => {
+      const next = [enriched, ...prev];
+      saveStoreDataToCloud({ orders: next });
+      return next;
+    });
 
     addAdminNotification({
       title: `📝 Nuevo Pedido Manual / Histórico: ${order.orderCode}`,
@@ -1347,6 +1418,196 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     });
 
     return newClose;
+  };
+
+  // ----------------------------------------------------
+  // SISTEMA DE CONTROL FINANCIERO POR PORCENTAJES (100% DE PEDIDOS)
+  // ----------------------------------------------------
+  const MONTH_NAMES_ES: Record<string, string> = {
+    '01': 'Enero',
+    '02': 'Febrero',
+    '03': 'Marzo',
+    '04': 'Abril',
+    '05': 'Mayo',
+    '06': 'Junio',
+    '07': 'Julio',
+    '08': 'Agosto',
+    '09': 'Septiembre',
+    '10': 'Octubre',
+    '11': 'Noviembre',
+    '12': 'Diciembre',
+  };
+
+  const currentYearMonth = new Date().toISOString().slice(0, 7);
+
+  const availableFinancialMonths = React.useMemo(() => {
+    const monthSet = new Set<string>();
+    monthSet.add(currentYearMonth);
+    orders.forEach((ord) => {
+      if (ord.createdAt && ord.createdAt.length >= 7) {
+        monthSet.add(ord.createdAt.slice(0, 7));
+      }
+    });
+    const sorted = Array.from(monthSet).sort().reverse();
+    const result = sorted.map((key) => {
+      const parts = key.split('-');
+      const year = parts[0];
+      const month = parts[1] || '01';
+      const monthName = MONTH_NAMES_ES[month] || month;
+      return {
+        key,
+        label: `${monthName} ${year}`,
+      };
+    });
+    return [
+      ...result,
+      { key: 'historico', label: 'Histórico Consolidado (Todos los meses)' }
+    ];
+  }, [orders, currentYearMonth]);
+
+  const getMonthlyFinancialSummary = (monthKey?: string): MonthlyFinancialSummary => {
+    const targetKey = monthKey || currentYearMonth;
+    const isHistorical = targetKey === 'historico';
+
+    // Filter valid orders (exclude cancelled)
+    const validOrders = orders.filter((o) => o.status !== 'cancelado');
+    const targetOrders = isHistorical
+      ? validOrders
+      : validOrders.filter((o) => o.createdAt && o.createdAt.startsWith(targetKey));
+
+    const totalOrdersRevenueUSD = targetOrders.reduce((sum, o) => sum + (Number(o.totalUSD) || 0), 0);
+    const totalOrdersRevenueVES = targetOrders.reduce(
+      (sum, o) => sum + (Number(o.totalVES) || (Number(o.totalUSD) * exchangeRateBCV)),
+      0
+    );
+
+    // Reglas de distribución estricta 100%:
+    // 1. Insumos y Operación: 40%
+    // 2. Sueldo Andrés (50% de bolsa 30%): 15%
+    // 3. Sueldo Valeria (50% de bolsa 30%): 15%
+    // 4. Equipos y Herramientas: 15%
+    // 5. Reserva / Ahorro (Devaluación): 10%
+    // 6. Donativos y Fondo de la Marca: 5%
+    const insumosOperacionAccumulatedUSD = Number((totalOrdersRevenueUSD * 0.40).toFixed(2));
+    const sueldoAndresAccumulatedUSD = Number((totalOrdersRevenueUSD * 0.15).toFixed(2));
+    const sueldoValeriaAccumulatedUSD = Number((totalOrdersRevenueUSD * 0.15).toFixed(2));
+    const equiposHerramientasAccumulatedUSD = Number((totalOrdersRevenueUSD * 0.15).toFixed(2));
+    const reservaAhorroAccumulatedUSD = Number((totalOrdersRevenueUSD * 0.10).toFixed(2));
+    const donativosMarcaAccumulatedUSD = Number((totalOrdersRevenueUSD * 0.05).toFixed(2));
+
+    // Retiros de socios en este periodo
+    const periodWithdrawals = isHistorical
+      ? partnerWithdrawals
+      : partnerWithdrawals.filter((w) => w.date && w.date.startsWith(targetKey));
+
+    let withdrawnAndresUSD = 0;
+    let withdrawnValeriaUSD = 0;
+    periodWithdrawals.forEach((w) => {
+      const amt = Number(w.amountUSD) || 0;
+      if (w.partner === 'Andres') {
+        withdrawnAndresUSD += amt;
+      } else if (w.partner === 'Valeria') {
+        withdrawnValeriaUSD += amt;
+      } else if (w.partner === 'Ambos') {
+        withdrawnAndresUSD += amt / 2;
+        withdrawnValeriaUSD += amt / 2;
+      }
+    });
+
+    // Saldo disponible real acumulado histórico para socios
+    const allTimeOrdersRevenueUSD = validOrders.reduce((sum, o) => sum + (Number(o.totalUSD) || 0), 0);
+    const allTimeAndresEarned = Number((allTimeOrdersRevenueUSD * 0.15).toFixed(2));
+    const allTimeValeriaEarned = Number((allTimeOrdersRevenueUSD * 0.15).toFixed(2));
+
+    let allTimeWithdrawnAndres = 0;
+    let allTimeWithdrawnValeria = 0;
+    partnerWithdrawals.forEach((w) => {
+      const amt = Number(w.amountUSD) || 0;
+      if (w.partner === 'Andres') {
+        allTimeWithdrawnAndres += amt;
+      } else if (w.partner === 'Valeria') {
+        allTimeWithdrawnValeria += amt;
+      } else if (w.partner === 'Ambos') {
+        allTimeWithdrawnAndres += amt / 2;
+        allTimeWithdrawnValeria += amt / 2;
+      }
+    });
+
+    const balanceAvailableAndresUSD = Math.max(0, Number((allTimeAndresEarned - allTimeWithdrawnAndres).toFixed(2)));
+    const balanceAvailableValeriaUSD = Math.max(0, Number((allTimeValeriaEarned - allTimeWithdrawnValeria).toFixed(2)));
+
+    let monthLabel = 'Histórico Consolidado';
+    if (!isHistorical) {
+      const parts = targetKey.split('-');
+      const year = parts[0];
+      const month = parts[1] || '01';
+      monthLabel = `${MONTH_NAMES_ES[month] || month} ${year}`;
+    }
+
+    return {
+      monthKey: targetKey,
+      monthLabel,
+      totalOrdersRevenueUSD: Number(totalOrdersRevenueUSD.toFixed(2)),
+      totalOrdersRevenueVES: Number(totalOrdersRevenueVES.toFixed(2)),
+      ordersCount: targetOrders.length,
+      insumosOperacionAccumulatedUSD,
+      sueldoAndresAccumulatedUSD,
+      sueldoValeriaAccumulatedUSD,
+      equiposHerramientasAccumulatedUSD,
+      reservaAhorroAccumulatedUSD,
+      donativosMarcaAccumulatedUSD,
+      withdrawnAndresUSD: Number(withdrawnAndresUSD.toFixed(2)),
+      withdrawnValeriaUSD: Number(withdrawnValeriaUSD.toFixed(2)),
+      balanceAvailableAndresUSD,
+      balanceAvailableValeriaUSD,
+    };
+  };
+
+  const recordPartnerWithdrawal = (params: {
+    partner: 'Andres' | 'Valeria' | 'Ambos';
+    amountUSD: number;
+    account: 'binance_usdt' | 'banco_del_tesoro_ves' | 'efectivo_usd' | 'efectivo_ves';
+    notes?: string;
+    registeredBy?: string;
+  }): PartnerSalaryWithdrawal => {
+    const isUSD = params.account === 'binance_usdt' || params.account === 'efectivo_usd';
+    const amountVES = Number((params.amountUSD * exchangeRateBCV).toFixed(2));
+    const deductedAccountAmount = isUSD ? params.amountUSD : amountVES;
+
+    const newWithdrawal: PartnerSalaryWithdrawal = {
+      id: `wth-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+      partner: params.partner,
+      amountUSD: Number(params.amountUSD.toFixed(2)),
+      amountVES,
+      account: params.account,
+      date: new Date().toISOString(),
+      concept: `Cierre / Retiro de sueldo socio (${params.partner}): $${params.amountUSD.toFixed(2)} USD`,
+      registeredBy: params.registeredBy || 'Administrador',
+      notes: params.notes,
+    };
+
+    setPartnerWithdrawals((prev) => {
+      const next = [newWithdrawal, ...prev];
+      saveStoreDataToCloud({ partnerWithdrawals: next });
+      return next;
+    });
+
+    // Descontar automáticamente el dinero en el flujo de caja / tesorería
+    recordCashOperation({
+      account: params.account,
+      type: 'egreso',
+      amount: deductedAccountAmount,
+      concept: `Retiro de sueldos socios (${params.partner}): $${params.amountUSD.toFixed(2)} USD ${params.notes ? `• ${params.notes}` : ''}`,
+      category: 'retiro',
+    });
+
+    addAdminNotification({
+      title: `💼 Retiro de Sueldo Realizado: ${params.partner}`,
+      message: `Se debitaron $${params.amountUSD.toFixed(2)} USD (${params.account}) como retiro de sueldo para ${params.partner}.`,
+      type: 'delivery',
+    });
+
+    return newWithdrawal;
   };
 
   const addKanbanColumn = (column: KanbanColumn) => {
@@ -1853,6 +2114,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         recordDebtPayment,
         cashCloses,
         closeDailyCash,
+        // Sistema de Control Financiero por Porcentajes (100% de Pedidos)
+        calculateOrderFinancialSplit,
+        partnerWithdrawals,
+        recordPartnerWithdrawal,
+        getMonthlyFinancialSummary,
+        availableFinancialMonths,
         // Notifications
         adminNotifications,
         markNotificationRead,
