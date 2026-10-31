@@ -375,6 +375,19 @@ export const BrandAssetManager: React.FC = () => {
             </button>
           </div>
         </div>
+
+        {/* PWA Phone Icon Guidance Banner */}
+        <div className="mt-5 p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-300 text-xs flex items-start gap-3">
+          <Smartphone size={20} className="shrink-0 mt-0.5 text-amber-400" />
+          <div className="space-y-1">
+            <p className="font-bold text-white text-xs">
+              📱 ¿Cómo cambiar el icono cuando la instalas en el teléfono?
+            </p>
+            <p className="text-neutral-300 text-[11px] leading-relaxed">
+              Sube tu logotipo o símbolo en los slots <strong className="text-amber-400">"Icono de la App (Favicon / PWA)"</strong> o <strong className="text-amber-400">"Icono Cuadrado 512x512"</strong> a continuación. Gracias a la sincronización en tiempo real, el icono se actualiza en la nube y se reflejará al instalar o añadir la aplicación a la pantalla de inicio de tu teléfono móvil (Android o iPhone).
+            </p>
+          </div>
+        </div>
       </div>
 
       {/* Surface Preview Mode Toggles */}
@@ -645,7 +658,7 @@ export const BrandAssetManager: React.FC = () => {
                 ) : (
                   <ExodoWordmarkLogo color="#000000" className="h-5 w-auto" />
                 )}
-                <span className="text-[9px] font-mono text-neutral-500">EXD-2412-CCS</span>
+                <span className="text-[9px] font-mono text-neutral-500">EXD-8941-CCS</span>
               </div>
               <div className="pt-2 text-[9px] font-mono space-y-0.5 text-neutral-700">
                 <p>Banco: Banesco (0134)</p>

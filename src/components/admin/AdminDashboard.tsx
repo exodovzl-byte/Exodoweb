@@ -30,7 +30,8 @@ import {
   CheckCircle2,
   Ban,
   Receipt,
-  FileCheck
+  FileCheck,
+  Cloud
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { Product, Order, KanbanColumn, CategoryCircle, ProductCategory, ProductCollection } from '../../types';
@@ -81,6 +82,9 @@ export const AdminDashboard: React.FC = () => {
     adminNotifications,
     markNotificationRead,
     clearNotifications,
+    isCloudSyncing,
+    lastCloudSyncTimestamp,
+    syncNowWithCloud,
   } = useStore();
 
   const [activeTab, setActiveTab] = useState<'kanban' | 'products' | 'artworks' | 'brand' | 'treasury' | 'custom_lab' | 'sheets'>('kanban');
@@ -88,6 +92,7 @@ export const AdminDashboard: React.FC = () => {
   // Kanban Filters
   const [kanbanSearch, setKanbanSearch] = useState('');
   const [kanbanProductFilter, setKanbanProductFilter] = useState<string>('todos');
+  const [mobileKanbanStage, setMobileKanbanStage] = useState<string>('todos');
 
   // Modals for Orders & Treasury
   const [isCashCloseModalOpen, setIsCashCloseModalOpen] = useState(false);
@@ -261,195 +266,261 @@ export const AdminDashboard: React.FC = () => {
     <div className="bg-neutral-950 min-h-screen text-white pb-20">
       
       {/* Top Admin Bar */}
-      <div className="bg-black border-b border-neutral-800 sticky top-0 z-30 px-4 sm:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold shrink-0">
-            <ShieldCheck size={22} />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-xl font-black uppercase tracking-tight font-brand-heading">
-                ÉXODO BACKOFFICE ADMIN
-              </h1>
-              <span className="px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-mono font-bold uppercase">
-                Clave 2412 Activa
-              </span>
+      <div className="bg-black border-b border-neutral-800 sticky top-0 z-30 px-3 sm:px-8 py-3">
+        {/* Row 1: Logo & Controls */}
+        <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-400 flex items-center justify-center font-bold shrink-0">
+              <ShieldCheck size={20} />
             </div>
-            {/* Quick Treasury Pill */}
-            <div className="flex items-center gap-2 text-[10px] font-mono text-neutral-400 mt-0.5 flex-wrap">
-              <span className="text-emerald-400 font-bold flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                Binance: ${treasuryAccounts?.binanceUSDT?.toFixed(2) || '0.00'} USDT
-              </span>
-              <span>•</span>
-              <span className="text-amber-400 font-bold">
-                Tesoro: Bs. {(treasuryAccounts?.bancoDelTesoroVES || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </span>
-              <span>•</span>
-              <span className="text-emerald-300 font-bold">
-                Efectivo: ${treasuryAccounts?.efectivoUSD?.toFixed(2) || '0.00'} USD
-              </span>
-              <span>•</span>
-              <span className="text-neutral-500">
-                Tasa BCV: Bs. {exchangeRateBCV.toFixed(2)}/$
-              </span>
+            <div className="min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <h1 className="text-base sm:text-xl font-black uppercase tracking-tight font-brand-heading truncate">
+                  ÉXODO ADMIN
+                </h1>
+                <span className="hidden sm:inline px-2 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/40 text-[10px] font-mono font-bold uppercase">
+                  Sesión Administrador Activa
+                </span>
+                {/* Cloud Sync Status Button */}
+                <button
+                  onClick={syncNowWithCloud}
+                  disabled={isCloudSyncing}
+                  className="px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 text-[10px] font-mono font-bold flex items-center gap-1 hover:bg-emerald-500/20 transition-all cursor-pointer"
+                  title="Sincronizar en tiempo real con Firestore y la nube ahora"
+                >
+                  <Cloud size={11} className={isCloudSyncing ? 'animate-pulse text-amber-400' : 'text-emerald-400'} />
+                  <span className="hidden xs:inline">{isCloudSyncing ? 'Sincronizando...' : 'Nube OK'}</span>
+                </button>
+              </div>
             </div>
           </div>
-        </div>
 
-        {/* Action Tabs, Notifications & Logout */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <div className="flex bg-neutral-900 p-1 rounded-xl border border-neutral-800 flex-wrap gap-1">
+          {/* Desktop Tab Switcher (hidden on mobile, mobile uses dropdown + chips below) */}
+          <div className="hidden lg:flex bg-neutral-900 p-1 rounded-xl border border-neutral-800 gap-1">
             <button
               onClick={() => setActiveTab('kanban')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                 activeTab === 'kanban' ? 'bg-[#0D253A] text-amber-400 shadow-md' : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <Kanban size={14} />
+              <Kanban size={13} />
               <span>Kanban OMS</span>
             </button>
-
             <button
               onClick={() => setActiveTab('treasury')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                 activeTab === 'treasury' ? 'bg-[#0D253A] text-amber-400 shadow-md' : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <Wallet size={14} />
-              <span>Tesorería & Flujo de Caja</span>
+              <Wallet size={13} />
+              <span>Tesorería</span>
             </button>
-
             <button
               onClick={() => setActiveTab('products')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                 activeTab === 'products' ? 'bg-[#0D253A] text-amber-400 shadow-md' : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <Package size={14} />
+              <Package size={13} />
               <span>Productos ({products.length})</span>
             </button>
-
             <button
               onClick={() => setActiveTab('artworks')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                 activeTab === 'artworks' ? 'bg-[#0D253A] text-amber-400 shadow-md' : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <ImageIcon size={14} />
-              <span>Asset Library ({artworkDesigns.length})</span>
+              <ImageIcon size={13} />
+              <span>Assets ({artworkDesigns.length})</span>
             </button>
-
             <button
               onClick={() => setActiveTab('brand')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                 activeTab === 'brand' ? 'bg-[#0D253A] text-amber-400 shadow-md' : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <Palette size={14} />
-              <span>Marca & Logos</span>
+              <Palette size={13} />
+              <span>Marca</span>
             </button>
-
             <button
               onClick={() => setActiveTab('custom_lab')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                 activeTab === 'custom_lab' ? 'bg-[#0D253A] text-amber-400 shadow-md' : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <Sliders size={14} />
-              <span>Custom Lab & Precios</span>
+              <Sliders size={13} />
+              <span>Custom Lab</span>
             </button>
-
             <button
               onClick={() => setActiveTab('sheets')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
                 activeTab === 'sheets' ? 'bg-[#0D253A] text-amber-400 shadow-md' : 'text-neutral-400 hover:text-white'
               }`}
             >
-              <FileSpreadsheet size={14} />
-              <span>Google Sheets</span>
+              <FileSpreadsheet size={13} />
+              <span>Sheets</span>
             </button>
           </div>
 
-          {/* Notifications Dropdown */}
-          <div className="relative">
-            <button
-              onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
-              className="relative p-2 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-amber-400 hover:border-neutral-700 transition-colors"
-              title="Notificaciones y comprobantes"
-            >
-              <Bell size={16} />
-              {adminNotifications.some((n) => !n.read) && (
-                <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-black text-[9px] font-black flex items-center justify-center animate-bounce">
-                  {adminNotifications.filter((n) => !n.read).length}
-                </span>
-              )}
-            </button>
-
-            {isNotifDropdownOpen && (
-              <div className="absolute right-0 mt-2 w-80 bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
-                <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
-                  <span className="text-xs font-bold text-white uppercase font-mono">
-                    Notificaciones Push ({adminNotifications.length})
+          {/* Right Controls: Notifications & Logout */}
+          <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+            {/* Notifications Dropdown */}
+            <div className="relative">
+              <button
+                onClick={() => setIsNotifDropdownOpen(!isNotifDropdownOpen)}
+                className="relative p-2 rounded-xl bg-neutral-900 border border-neutral-800 text-neutral-300 hover:text-amber-400 hover:border-neutral-700 transition-colors"
+                title="Notificaciones y comprobantes"
+              >
+                <Bell size={16} />
+                {adminNotifications.some((n) => !n.read) && (
+                  <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-amber-500 text-black text-[9px] font-black flex items-center justify-center animate-bounce">
+                    {adminNotifications.filter((n) => !n.read).length}
                   </span>
-                  {adminNotifications.length > 0 && (
-                    <button
-                      onClick={clearNotifications}
-                      className="text-[10px] text-neutral-400 hover:text-red-400 transition-colors"
-                    >
-                      Limpiar
-                    </button>
-                  )}
-                </div>
+                )}
+              </button>
 
-                <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
-                  {adminNotifications.map((n) => (
-                    <div
-                      key={n.id}
-                      onClick={() => markNotificationRead(n.id)}
-                      className={`p-2.5 rounded-xl border transition-all cursor-pointer text-xs ${
-                        n.read
-                          ? 'bg-neutral-900/40 border-neutral-850 opacity-60'
-                          : 'bg-neutral-900 border-amber-500/40'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-1">
-                        <span className="font-bold text-white">{n.title}</span>
-                        <span className="text-[9px] text-neutral-500 font-mono">
-                          {new Date(n.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        </span>
+              {isNotifDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-neutral-950 border border-neutral-800 rounded-2xl shadow-2xl z-50 p-3 space-y-2">
+                  <div className="flex items-center justify-between pb-2 border-b border-neutral-800">
+                    <span className="text-xs font-bold text-white uppercase font-mono">
+                      Notificaciones ({adminNotifications.length})
+                    </span>
+                    {adminNotifications.length > 0 && (
+                      <button
+                        onClick={clearNotifications}
+                        className="text-[10px] text-neutral-400 hover:text-red-400 transition-colors"
+                      >
+                        Limpiar
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="max-h-64 overflow-y-auto space-y-2 pr-1">
+                    {adminNotifications.map((n) => (
+                      <div
+                        key={n.id}
+                        onClick={() => markNotificationRead(n.id)}
+                        className={`p-2.5 rounded-xl border transition-all cursor-pointer text-xs ${
+                          n.read
+                            ? 'bg-neutral-900/40 border-neutral-850 opacity-60'
+                            : 'bg-neutral-900 border-amber-500/40'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-1">
+                          <span className="font-bold text-white">{n.title}</span>
+                          <span className="text-[9px] text-neutral-500 font-mono">
+                            {new Date(n.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-neutral-300 mt-1 leading-snug">{n.message}</p>
+                        {n.orderCode && (
+                          <span className="mt-1.5 inline-block text-[9px] font-mono text-amber-400 bg-black/60 px-1.5 py-0.5 rounded border border-neutral-800">
+                            {n.orderCode}
+                          </span>
+                        )}
                       </div>
-                      <p className="text-[11px] text-neutral-300 mt-1 leading-snug">{n.message}</p>
-                      {n.orderCode && (
-                        <span className="mt-1.5 inline-block text-[9px] font-mono text-amber-400 bg-black/60 px-1.5 py-0.5 rounded border border-neutral-800">
-                          {n.orderCode}
-                        </span>
-                      )}
-                    </div>
-                  ))}
+                    ))}
 
-                  {adminNotifications.length === 0 && (
-                    <p className="text-center py-6 text-xs text-neutral-500 font-mono">
-                      No hay notificaciones pendientes
-                    </p>
-                  )}
+                    {adminNotifications.length === 0 && (
+                      <p className="text-center py-6 text-xs text-neutral-500 font-mono">
+                        No hay notificaciones pendientes
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
-          <button
-            onClick={adminLogout}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-red-800 text-neutral-400 hover:text-red-400 text-xs font-bold uppercase transition-colors"
-            title="Cerrar panel de administración"
-          >
-            <LogOut size={14} />
-            <span className="hidden sm:inline">Salir</span>
-          </button>
+            <button
+              onClick={adminLogout}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-neutral-900 border border-neutral-800 hover:border-red-800 text-neutral-400 hover:text-red-400 text-xs font-bold uppercase transition-colors"
+              title="Cerrar panel de administración"
+            >
+              <LogOut size={14} />
+              <span className="hidden sm:inline">Salir</span>
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Horizontal Scrolling Treasury Ticker */}
+        <div className="flex items-center gap-3 text-[10px] font-mono text-neutral-400 mt-2 overflow-x-auto no-scrollbar py-0.5 whitespace-nowrap border-t border-neutral-900/80 pt-1.5">
+          <span className="text-emerald-400 font-bold flex items-center gap-1 shrink-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+            Binance: ${treasuryAccounts?.binanceUSDT?.toFixed(2) || '0.00'} USDT
+          </span>
+          <span className="text-neutral-700">•</span>
+          <span className="text-amber-400 font-bold shrink-0">
+            Tesoro: Bs. {(treasuryAccounts?.bancoDelTesoroVES || 0).toLocaleString('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+          </span>
+          <span className="text-neutral-700">•</span>
+          <span className="text-emerald-300 font-bold shrink-0">
+            Efectivo: ${treasuryAccounts?.efectivoUSD?.toFixed(2) || '0.00'} USD
+          </span>
+          <span className="text-neutral-700">•</span>
+          <span className="text-neutral-400 shrink-0">
+            BCV: Bs. {exchangeRateBCV.toFixed(2)}/$
+          </span>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 pt-4 sm:pt-8">
+
+        {/* Mobile Dropdown & Compact Swipeable Chips (lg:hidden) */}
+        <div className="lg:hidden space-y-2 mb-5">
+          <div className="relative">
+            <select
+              value={activeTab}
+              onChange={(e) => setActiveTab(e.target.value as any)}
+              className="w-full bg-neutral-900 border border-neutral-700 text-amber-400 font-bold text-xs py-2.5 px-3.5 rounded-xl appearance-none pr-9 focus:outline-none focus:border-amber-400 font-mono shadow-md"
+            >
+              <option value="kanban">📋 Tablero Kanban OMS ({orders.length})</option>
+              <option value="treasury">💰 Tesorería & Flujo de Caja</option>
+              <option value="products">👕 Catálogo de Productos ({products.length})</option>
+              <option value="artworks">🎨 Asset Library ({artworkDesigns.length})</option>
+              <option value="brand">🏷️ Marca & Logos</option>
+              <option value="custom_lab">⚙️ Custom Lab & Precios</option>
+              <option value="sheets">📊 Google Sheets</option>
+            </select>
+            <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" size={16} />
+          </div>
+
+          {/* Horizontal Swipeable Chips */}
+          <div className="flex overflow-x-auto no-scrollbar gap-1.5 py-1 -mx-3 px-3">
+            {[
+              { id: 'kanban', label: 'Kanban OMS', count: orders.length, icon: Kanban },
+              { id: 'treasury', label: 'Tesorería', icon: Wallet },
+              { id: 'products', label: 'Productos', count: products.length, icon: Package },
+              { id: 'artworks', label: 'Assets', count: artworkDesigns.length, icon: ImageIcon },
+              { id: 'brand', label: 'Marca', icon: Palette },
+              { id: 'custom_lab', label: 'Custom Lab', icon: Sliders },
+              { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet },
+            ].map((chip) => {
+              const Icon = chip.icon;
+              const isActive = activeTab === chip.id;
+              return (
+                <button
+                  key={chip.id}
+                  onClick={() => setActiveTab(chip.id as any)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider whitespace-nowrap transition-all shrink-0 cursor-pointer ${
+                    isActive
+                      ? 'bg-amber-500 text-black shadow-md font-extrabold'
+                      : 'bg-neutral-900/80 text-neutral-400 border border-neutral-800 hover:text-white'
+                  }`}
+                >
+                  <Icon size={12} />
+                  <span>{chip.label}</span>
+                  {chip.count !== undefined && (
+                    <span className={`text-[9px] px-1.5 py-0.2 rounded-full font-mono ${
+                      isActive ? 'bg-black text-amber-400' : 'bg-neutral-800 text-neutral-400'
+                    }`}>
+                      {chip.count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
         {/* ======================================================== */}
         {/* TAB 1: KANBAN PRODUCTION & ORDER MANAGEMENT SYSTEM (OMS) */}
@@ -523,6 +594,34 @@ export const AdminDashboard: React.FC = () => {
               </div>
             </div>
 
+            {/* Mobile Kanban Stage Selector (md:hidden) */}
+            <div className="md:hidden flex overflow-x-auto no-scrollbar gap-1.5 p-1 bg-neutral-900/60 rounded-xl border border-neutral-800">
+              <button
+                onClick={() => setMobileKanbanStage('todos')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap transition-all ${
+                  mobileKanbanStage === 'todos' ? 'bg-amber-500 text-black shadow' : 'text-neutral-400 hover:text-white'
+                }`}
+              >
+                Todas ({filteredOrders.length})
+              </button>
+              {kanbanColumns.map((col) => {
+                const count = filteredOrders.filter((o) => o.productionStage === col.id).length;
+                const isSelected = mobileKanbanStage === col.id;
+                return (
+                  <button
+                    key={col.id}
+                    onClick={() => setMobileKanbanStage(col.id)}
+                    className={`px-3 py-1.5 rounded-lg text-xs font-bold whitespace-nowrap flex items-center gap-1.5 transition-all ${
+                      isSelected ? 'bg-amber-500 text-black shadow' : 'text-neutral-400 hover:text-white'
+                    }`}
+                  >
+                    <span className="w-2 h-2 rounded-full" style={{ backgroundColor: col.color }}></span>
+                    <span>{col.title} ({count})</span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* KANBAN BOARD COLUMNS */}
             <div className="grid grid-cols-1 md:grid-cols-3 lg:grid-cols-5 gap-4 overflow-x-auto pb-4">
               {kanbanColumns.map((col, colIdx) => {
@@ -531,7 +630,9 @@ export const AdminDashboard: React.FC = () => {
                 return (
                   <div
                     key={col.id}
-                    className="flex flex-col rounded-2xl bg-neutral-900/40 border border-neutral-800 min-h-[500px]"
+                    className={`flex flex-col rounded-2xl bg-neutral-900/40 border border-neutral-800 min-h-[500px] ${
+                      mobileKanbanStage !== 'todos' && mobileKanbanStage !== col.id ? 'hidden md:flex' : 'flex'
+                    }`}
                   >
                     {/* Column Header */}
                     <div className="p-3.5 border-b border-neutral-800 flex items-center justify-between bg-neutral-900/80 rounded-t-2xl">
@@ -712,9 +813,9 @@ export const AdminDashboard: React.FC = () => {
         {activeTab === 'products' && (
           <div className="space-y-6">
             
-            <div className="flex items-center justify-between">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-xl font-black uppercase tracking-tight font-brand-heading">
+                <h2 className="text-lg sm:text-xl font-black uppercase tracking-tight font-brand-heading">
                   Catálogo Global de Productos
                 </h2>
                 <p className="text-xs text-neutral-400">
@@ -722,10 +823,10 @@ export const AdminDashboard: React.FC = () => {
                 </p>
               </div>
 
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
                 <button
                   onClick={() => setActiveTab('artworks')}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-700 hover:border-amber-400 text-neutral-200 text-xs font-bold uppercase rounded-lg transition-colors cursor-pointer"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-neutral-900 border border-neutral-700 hover:border-amber-400 text-neutral-200 text-xs font-bold uppercase rounded-lg transition-colors cursor-pointer"
                   title="Abrir Colección Asset Library"
                 >
                   <ImageIcon size={14} className="text-amber-400" />
@@ -734,10 +835,11 @@ export const AdminDashboard: React.FC = () => {
 
                 <button
                   onClick={handleSyncInventoryToSheets}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-neutral-900 border border-neutral-700 hover:border-neutral-500 text-neutral-200 text-xs font-bold uppercase rounded-lg"
+                  className="flex items-center gap-1.5 px-3 py-2 bg-neutral-900 border border-neutral-700 hover:border-neutral-500 text-neutral-200 text-xs font-bold uppercase rounded-lg"
                 >
                   <FileSpreadsheet size={14} className="text-emerald-400" />
-                  <span>Exportar Catálogo a Sheets</span>
+                  <span className="hidden sm:inline">Exportar a Sheets</span>
+                  <span className="sm:hidden">Sheets</span>
                 </button>
 
                 <button
@@ -745,16 +847,96 @@ export const AdminDashboard: React.FC = () => {
                     setEditingProduct(null);
                     setIsProductModalOpen(true);
                   }}
-                  className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-extrabold uppercase rounded-lg shadow-lg active:scale-95"
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-extrabold uppercase rounded-lg shadow-lg active:scale-95"
                 >
-                  <Plus size={16} />
-                  <span>Nuevo Producto</span>
+                  <Plus size={15} />
+                  <span>+ Nuevo</span>
                 </button>
               </div>
             </div>
 
-            {/* Catalog Table */}
-            <div className="overflow-x-auto rounded-2xl bg-neutral-900/40 border border-neutral-800">
+            {/* Mobile Product Cards (md:hidden) */}
+            <div className="md:hidden space-y-3">
+              {products.map((prod) => (
+                <div
+                  key={prod.id}
+                  className="p-3.5 rounded-2xl bg-neutral-900/60 border border-neutral-800 space-y-3 shadow-md"
+                >
+                  <div className="flex items-start gap-3">
+                    <img
+                      src={prod.images[0]}
+                      alt=""
+                      className="w-16 h-16 object-cover rounded-xl bg-black border border-neutral-800 shrink-0"
+                      referrerPolicy="no-referrer"
+                    />
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="px-1.5 py-0.5 rounded bg-neutral-800 text-neutral-300 text-[9px] font-mono uppercase">
+                          {prod.category}
+                        </span>
+                        <span className="text-[10px] text-amber-400 font-bold truncate">
+                          {prod.collection}
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-mono ml-auto ${
+                          prod.stock > 10 ? 'bg-emerald-950 text-emerald-300' : 'bg-red-950 text-red-300'
+                        }`}>
+                          {prod.stock} un.
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-bold text-white mt-1 truncate">{prod.name}</h4>
+                      <p className="text-[10px] text-neutral-400 truncate mt-0.5">{prod.scripture.split('—')[0]}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between text-xs font-mono bg-black/50 p-2.5 rounded-xl border border-neutral-850">
+                    <div>
+                      <span className="text-neutral-500 text-[9px] block">Base:</span>
+                      <span className="font-bold text-white">${prod.basePrice.toFixed(2)}</span>
+                    </div>
+                    {prod.discountPrice && (
+                      <div>
+                        <span className="text-amber-500 text-[9px] block">Oferta:</span>
+                        <span className="font-bold text-amber-400">${prod.discountPrice.toFixed(2)}</span>
+                      </div>
+                    )}
+                    {prod.category === 'franelas' && (
+                      <div>
+                        <span className="text-neutral-500 text-[9px] block">Oversize:</span>
+                        <span className="font-bold text-neutral-300">+${prod.oversizePriceDelta}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2 pt-1 border-t border-neutral-850">
+                    <button
+                      onClick={() => {
+                        setEditingProduct(prod);
+                        setIsProductModalOpen(true);
+                      }}
+                      className="flex-1 py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-neutral-700 transition-colors"
+                    >
+                      <Edit3 size={13} className="text-amber-400" />
+                      <span>Editar</span>
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (window.confirm(`¿Eliminar producto "${prod.name}"?`)) {
+                          deleteProduct(prod.id);
+                        }
+                      }}
+                      className="py-2 px-3 rounded-xl bg-red-950/40 hover:bg-red-950 text-red-400 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-red-900/40 transition-colors"
+                      title="Eliminar producto"
+                    >
+                      <Trash2 size={13} />
+                      <span>Eliminar</span>
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Catalog Table (hidden md:block) */}
+            <div className="hidden md:block overflow-x-auto rounded-2xl bg-neutral-900/40 border border-neutral-800">
               <table className="w-full text-left text-xs">
                 <thead className="bg-neutral-900/80 text-[10px] uppercase font-mono text-neutral-400 border-b border-neutral-800">
                   <tr>

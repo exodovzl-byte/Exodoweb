@@ -229,7 +229,7 @@ export const Footer: React.FC = () => {
                 className="inline-flex items-center gap-1 text-[11px] text-neutral-500 hover:text-neutral-300 transition-colors"
               >
                 <ShieldCheck size={13} />
-                <span>Gestión Backoffice (Clave 2412)</span>
+                <span>Gestión Backoffice</span>
               </button>
             </div>
           </div>

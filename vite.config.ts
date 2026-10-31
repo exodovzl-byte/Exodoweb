@@ -1,6 +1,7 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { defineConfig, Plugin } from 'vite';
 import dotenv from 'dotenv';
@@ -86,6 +87,63 @@ function geminiApiPlugin(): Plugin {
             }
           });
           return;
+        }
+
+        // Store state persistence for cross-device sync
+        if (req.url === '/api/store-data') {
+          const dataDir = path.resolve(__dirname, 'data');
+          const storeFile = path.resolve(dataDir, 'store_state.json');
+
+          if (req.method === 'GET') {
+            try {
+              if (fs.existsSync(storeFile)) {
+                const raw = fs.readFileSync(storeFile, 'utf8');
+                const parsed = JSON.parse(raw);
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, data: parsed, updatedAt: parsed.updatedAt }));
+                return;
+              }
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ success: true, data: null }));
+            } catch (err: any) {
+              res.statusCode = 500;
+              res.setHeader('Content-Type', 'application/json');
+              res.end(JSON.stringify({ error: 'Error leyendo datos de la tienda' }));
+            }
+            return;
+          }
+
+          if (req.method === 'POST') {
+            let body = '';
+            req.on('data', chunk => { body += chunk; });
+            req.on('end', () => {
+              try {
+                if (!fs.existsSync(dataDir)) {
+                  fs.mkdirSync(dataDir, { recursive: true });
+                }
+                let existing: any = {};
+                if (fs.existsSync(storeFile)) {
+                  try {
+                    existing = JSON.parse(fs.readFileSync(storeFile, 'utf8'));
+                  } catch (e) {}
+                }
+                const incoming = JSON.parse(body || '{}');
+                const merged = {
+                  ...existing,
+                  ...incoming,
+                  updatedAt: incoming.updatedAt || new Date().toISOString(),
+                };
+                fs.writeFileSync(storeFile, JSON.stringify(merged, null, 2), 'utf8');
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ success: true, updatedAt: merged.updatedAt }));
+              } catch (err: any) {
+                res.statusCode = 500;
+                res.setHeader('Content-Type', 'application/json');
+                res.end(JSON.stringify({ error: 'Error guardando datos de la tienda' }));
+              }
+            });
+            return;
+          }
         }
 
         next();

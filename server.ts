@@ -1,5 +1,6 @@
 import express from 'express';
 import path from 'path';
+import fs from 'fs';
 import { fileURLToPath } from 'url';
 import dotenv from 'dotenv';
 import { generateStreetwearImage, editStreetwearImage } from './src/server/geminiHandler.ts';
@@ -91,6 +92,54 @@ app.post('/api/send-email', async (req, res) => {
   } catch (error: any) {
     console.error('API Error /api/send-email:', error);
     return res.status(500).json({ error: 'Error procesando notificación de correo' });
+  }
+});
+
+// Persistent Store State Storage (Dual backup for cross-device sync)
+const DATA_DIR = path.resolve(__dirname, 'data');
+const STORE_STATE_FILE = path.resolve(DATA_DIR, 'store_state.json');
+
+if (!fs.existsSync(DATA_DIR)) {
+  try {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  } catch (e) {
+    console.warn('Could not create data directory:', e);
+  }
+}
+
+app.get('/api/store-data', (_req, res) => {
+  try {
+    if (fs.existsSync(STORE_STATE_FILE)) {
+      const raw = fs.readFileSync(STORE_STATE_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      return res.json({ success: true, data, updatedAt: data.updatedAt });
+    }
+    return res.json({ success: true, data: null });
+  } catch (err: any) {
+    console.error('Error reading store state:', err);
+    return res.status(500).json({ error: 'Error leyendo datos de la tienda' });
+  }
+});
+
+app.post('/api/store-data', (req, res) => {
+  try {
+    let existing: any = {};
+    if (fs.existsSync(STORE_STATE_FILE)) {
+      try {
+        existing = JSON.parse(fs.readFileSync(STORE_STATE_FILE, 'utf8'));
+      } catch (e) {}
+    }
+    const incoming = req.body || {};
+    const merged = {
+      ...existing,
+      ...incoming,
+      updatedAt: incoming.updatedAt || new Date().toISOString(),
+    };
+    fs.writeFileSync(STORE_STATE_FILE, JSON.stringify(merged, null, 2), 'utf8');
+    return res.json({ success: true, updatedAt: merged.updatedAt });
+  } catch (err: any) {
+    console.error('Error saving store state:', err);
+    return res.status(500).json({ error: 'Error guardando datos de la tienda' });
   }
 });
 

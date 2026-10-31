@@ -245,7 +245,7 @@ export const Navbar: React.FC = () => {
                   ? 'bg-amber-500/20 text-amber-400 border border-amber-500/40'
                   : 'text-neutral-400 hover:text-white hover:bg-neutral-900'
               }`}
-              title={isAdminAuthenticated ? 'Panel Administrador Activo' : 'Acceso Backoffice (Clave 2412)'}
+              title={isAdminAuthenticated ? 'Panel Administrador Activo' : 'Acceso Backoffice Administrador'}
             >
               <ShieldCheck size={20} />
             </button>
@@ -340,7 +340,7 @@ export const Navbar: React.FC = () => {
               className="flex items-center justify-center gap-2 py-2.5 rounded-lg bg-neutral-900/60 border border-neutral-800 text-neutral-400 text-xs font-semibold uppercase tracking-wider"
             >
               <ShieldCheck size={15} />
-              {isAdminAuthenticated ? 'Panel Admin ÉXODO' : 'Acceso Administrador (2412)'}
+              {isAdminAuthenticated ? 'Panel Admin ÉXODO' : 'Acceso Administrador'}
             </button>
           </div>
         </div>

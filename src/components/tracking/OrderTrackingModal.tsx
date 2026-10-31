@@ -84,7 +84,7 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({ initialC
             RASTREO DE PEDIDO EN VIVO
           </h2>
           <p className="text-xs text-neutral-400 mt-1">
-            Ingresa tu Código Único de Pedido (ej. <span className="text-amber-400 font-mono">EXD-2412-CCS</span>) recibido tras confirmar tu comprobante en WhatsApp.
+            Ingresa tu Código Único de Pedido (ej. <span className="text-amber-400 font-mono">EXD-8941-CCS</span>) recibido tras confirmar tu comprobante en WhatsApp.
           </p>
         </div>
 
@@ -234,7 +234,7 @@ export const OrderTrackingModal: React.FC<OrderTrackingModalProps> = ({ initialC
               No se encontró ningún pedido con el código "{searchCode}"
             </p>
             <p className="text-xs text-neutral-400 max-w-sm mx-auto">
-              Verifica haber escrito las letras y números correctamente (ej. EXD-2412-CCS) o consulta directamente a nuestro WhatsApp.
+              Verifica haber escrito las letras y números correctamente (ej. EXD-8941-CCS) o consulta directamente a nuestro WhatsApp.
             </p>
           </div>
         ) : (

@@ -51,6 +51,12 @@ import {
   saveCashTransactionToFirestore, 
   subscribeToFirestoreCashBalances 
 } from '../services/firestoreCashService';
+import { 
+  saveStoreDataToCloud, 
+  fetchStoreDataFromCloud, 
+  subscribeToStoreDataCloud, 
+  StoreCloudState 
+} from '../services/cloudStoreSync';
 import confetti from 'canvas-confetti';
 
 interface StoreContextType {
@@ -225,6 +231,11 @@ interface StoreContextType {
   markNotificationRead: (id: string) => void;
   clearNotifications: () => void;
   sendPushNotification: (title: string, body: string) => void;
+
+  // Cloud Sync (Real-time Cross-Device Synchronization)
+  isCloudSyncing: boolean;
+  lastCloudSyncTimestamp: string | null;
+  syncNowWithCloud: () => Promise<void>;
 }
 
 const StoreContext = createContext<StoreContextType | undefined>(undefined);
@@ -384,15 +395,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }, [customLabMockups]);
 
   const addCustomLabMockup = (mockup: CustomLabMockup) => {
-    setCustomLabMockups((prev) => [mockup, ...prev]);
+    setCustomLabMockups((prev) => {
+      const next = [mockup, ...prev];
+      saveStoreDataToCloud({ customLabMockups: next });
+      return next;
+    });
   };
 
   const deleteCustomLabMockup = (id: string) => {
-    setCustomLabMockups((prev) => prev.filter((m) => m.id !== id));
+    setCustomLabMockups((prev) => {
+      const next = prev.filter((m) => m.id !== id);
+      saveStoreDataToCloud({ customLabMockups: next });
+      return next;
+    });
   };
 
   const updateCustomLabMockup = (id: string, updates: Partial<CustomLabMockup>) => {
-    setCustomLabMockups((prev) => prev.map((m) => (m.id === id ? { ...m, ...updates } : m)));
+    setCustomLabMockups((prev) => {
+      const next = prev.map((m) => (m.id === id ? { ...m, ...updates } : m));
+      saveStoreDataToCloud({ customLabMockups: next });
+      return next;
+    });
   };
 
   // Treasury Accounts (Caja Efectivo USD, Caja Efectivo VES, Binance USDT, Banco del Tesoro)
@@ -484,6 +507,86 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return localStorage.getItem('exodo_sheets_last_sync');
   });
 
+  // Cloud Sync state (Multi-device real-time persistence)
+  const [isCloudSyncing, setIsCloudSyncing] = useState<boolean>(false);
+  const [lastCloudSyncTimestamp, setLastCloudSyncTimestamp] = useState<string | null>(() => {
+    return localStorage.getItem('exodo_cloud_sync_timestamp');
+  });
+
+  // Cross-Device Real-Time Cloud Synchronization
+  useEffect(() => {
+    let isMounted = true;
+    setIsCloudSyncing(true);
+
+    // 1. Initial Cloud State Hydration
+    fetchStoreDataFromCloud()
+      .then((cloudData) => {
+        if (!isMounted || !cloudData) {
+          setIsCloudSyncing(false);
+          return;
+        }
+        console.log('[StoreContext] ☁️ Sincronizando datos de la tienda desde la nube...');
+        if (cloudData.brandConfig) setBrandConfig(cloudData.brandConfig);
+        if (cloudData.products && cloudData.products.length > 0) setProducts(cloudData.products);
+        if (cloudData.labPricingConfig) setLabPricingConfig(cloudData.labPricingConfig);
+        if (cloudData.customLabMockups) setCustomLabMockups(cloudData.customLabMockups);
+        if (cloudData.artworkDesigns) setArtworkDesigns(cloudData.artworkDesigns);
+        if (cloudData.heroSlides) setHeroSlides(cloudData.heroSlides);
+        if (cloudData.collections) setCollections(cloudData.collections);
+        if (cloudData.aboutContent) setAboutContent(cloudData.aboutContent);
+        if (cloudData.socialLinks) setSocialLinks(cloudData.socialLinks);
+        if (cloudData.orders && cloudData.orders.length > 0) {
+          setOrders((prev) => {
+            const remoteMap = new Map(cloudData.orders!.map((o) => [o.orderCode, o]));
+            const localOnly = prev.filter((o) => !remoteMap.has(o.orderCode));
+            return [...cloudData.orders!, ...localOnly];
+          });
+        }
+        if (cloudData.updatedAt) setLastCloudSyncTimestamp(cloudData.updatedAt);
+        setIsCloudSyncing(false);
+      })
+      .catch((err) => {
+        console.warn('[StoreContext] Error en hidratación inicial de nube:', err);
+        setIsCloudSyncing(false);
+      });
+
+    // 2. Real-time Subscription (Firestore WebSocket push across devices)
+    const unsubscribe = subscribeToStoreDataCloud((incoming) => {
+      if (!isMounted || !incoming) return;
+      console.log('[StoreContext] ⚡ Nube actualizada en otro dispositivo, aplicando cambios locales...');
+      if (incoming.brandConfig) setBrandConfig(incoming.brandConfig);
+      if (incoming.products && incoming.products.length > 0) setProducts(incoming.products);
+      if (incoming.labPricingConfig) setLabPricingConfig(incoming.labPricingConfig);
+      if (incoming.customLabMockups) setCustomLabMockups(incoming.customLabMockups);
+      if (incoming.artworkDesigns) setArtworkDesigns(incoming.artworkDesigns);
+      if (incoming.heroSlides) setHeroSlides(incoming.heroSlides);
+      if (incoming.collections) setCollections(incoming.collections);
+      if (incoming.aboutContent) setAboutContent(incoming.aboutContent);
+      if (incoming.socialLinks) setSocialLinks(incoming.socialLinks);
+      if (incoming.orders && incoming.orders.length > 0) setOrders(incoming.orders);
+      if (incoming.updatedAt) setLastCloudSyncTimestamp(incoming.updatedAt);
+    });
+
+    // 3. Re-check on window focus (e.g., when returning to app on mobile)
+    const onFocus = () => {
+      fetchStoreDataFromCloud().then((cloudData) => {
+        if (!isMounted || !cloudData) return;
+        if (cloudData.brandConfig) setBrandConfig(cloudData.brandConfig);
+        if (cloudData.products && cloudData.products.length > 0) setProducts(cloudData.products);
+        if (cloudData.labPricingConfig) setLabPricingConfig(cloudData.labPricingConfig);
+        if (cloudData.customLabMockups) setCustomLabMockups(cloudData.customLabMockups);
+        if (cloudData.updatedAt) setLastCloudSyncTimestamp(cloudData.updatedAt);
+      }).catch(() => {});
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      isMounted = false;
+      unsubscribe();
+      window.removeEventListener('focus', onFocus);
+    };
+  }, []);
+
   // Sync to local storage
   useEffect(() => {
     localStorage.setItem('exodo_treasury_accounts', JSON.stringify(treasuryAccounts));
@@ -562,6 +665,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     document.documentElement.style.setProperty('--primary-color', brandConfig.primaryColor);
     document.documentElement.style.setProperty('--secondary-color', brandConfig.secondaryColor);
     document.documentElement.style.setProperty('--accent-color', brandConfig.accentColor);
+
+    // Update PWA / browser favicon & apple-touch-icon dynamically from brand config
+    const customIcon = brandConfig.logoAssets?.appIcon || brandConfig.logoAssets?.appIconSquare;
+    if (customIcon) {
+      try {
+        let iconTag = document.querySelector("link[rel='icon']") as HTMLLinkElement;
+        if (!iconTag) {
+          iconTag = document.createElement('link');
+          iconTag.rel = 'icon';
+          document.head.appendChild(iconTag);
+        }
+        iconTag.href = customIcon;
+
+        let appleTag = document.querySelector("link[rel='apple-touch-icon']") as HTMLLinkElement;
+        if (!appleTag) {
+          appleTag = document.createElement('link');
+          appleTag.rel = 'apple-touch-icon';
+          document.head.appendChild(appleTag);
+        }
+        appleTag.href = brandConfig.logoAssets?.appIconSquare || customIcon;
+      } catch (e) {}
+    }
   }, [brandConfig]);
 
   useEffect(() => {
@@ -674,15 +799,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Product operations
   const addProduct = (product: Product) => {
-    setProducts((prev) => [product, ...prev]);
+    setProducts((prev) => {
+      const next = [product, ...prev];
+      saveStoreDataToCloud({ products: next });
+      return next;
+    });
   };
 
   const updateProduct = (product: Product) => {
-    setProducts((prev) => prev.map((p) => (p.id === product.id ? product : p)));
+    setProducts((prev) => {
+      const next = prev.map((p) => (p.id === product.id ? product : p));
+      saveStoreDataToCloud({ products: next });
+      return next;
+    });
   };
 
   const deleteProduct = (id: string) => {
-    setProducts((prev) => prev.filter((p) => p.id !== id));
+    setProducts((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      saveStoreDataToCloud({ products: next });
+      return next;
+    });
   };
 
   // Push Notification dispatcher
@@ -1301,7 +1438,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Brand & Font Management
   const updateBrandConfig = (config: Partial<BrandConfig>) => {
-    setBrandConfig((prev) => ({ ...prev, ...config }));
+    setBrandConfig((prev) => {
+      const next = { ...prev, ...config };
+      saveStoreDataToCloud({ brandConfig: next });
+      return next;
+    });
   };
 
   const uploadCustomFont = async (file: File): Promise<string> => {
@@ -1418,22 +1559,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Colección Asset Library Functions
   const addArtworkDesign = (design: ArtworkDesign) => {
-    setArtworkDesigns((prev) => [design, ...prev]);
+    setArtworkDesigns((prev) => {
+      const next = [design, ...prev];
+      saveStoreDataToCloud({ artworkDesigns: next });
+      return next;
+    });
   };
 
   const updateArtworkDesign = (id: string, updates: Partial<ArtworkDesign>) => {
-    setArtworkDesigns((prev) =>
-      prev.map((art) => (art.id === id ? { ...art, ...updates } : art))
-    );
+    setArtworkDesigns((prev) => {
+      const next = prev.map((art) => (art.id === id ? { ...art, ...updates } : art));
+      saveStoreDataToCloud({ artworkDesigns: next });
+      return next;
+    });
   };
 
   const deleteArtworkDesign = (id: string) => {
-    setArtworkDesigns((prev) => prev.filter((art) => art.id !== id));
+    setArtworkDesigns((prev) => {
+      const next = prev.filter((art) => art.id !== id);
+      saveStoreDataToCloud({ artworkDesigns: next });
+      return next;
+    });
   };
 
   const toggleArtworkSupport = (id: string, support: 'franela' | 'tote' | 'lamina' | 'stickers') => {
-    setArtworkDesigns((prev) =>
-      prev.map((art) => {
+    setArtworkDesigns((prev) => {
+      const next = prev.map((art) => {
         if (art.id !== id) return art;
         const currentVal = art.availableSupports[support];
         const updatedSupports = {
@@ -1458,50 +1609,73 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           availableSupports: updatedSupports,
           tags: newTags,
         };
-      })
-    );
+      });
+      saveStoreDataToCloud({ artworkDesigns: next });
+      return next;
+    });
   };
 
   // CMS Handlers
   const setProductFeatured = (productId: string, isFeatured: boolean) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, isFeatured } : p))
-    );
+    setProducts((prev) => {
+      const next = prev.map((p) => (p.id === productId ? { ...p, isFeatured } : p));
+      saveStoreDataToCloud({ products: next });
+      return next;
+    });
   };
 
   const setProductDiscount = (productId: string, discountPrice?: number) => {
-    setProducts((prev) =>
-      prev.map((p) => (p.id === productId ? { ...p, discountPrice } : p))
-    );
+    setProducts((prev) => {
+      const next = prev.map((p) => (p.id === productId ? { ...p, discountPrice } : p));
+      saveStoreDataToCloud({ products: next });
+      return next;
+    });
   };
 
   const updateHeroSlides = (slides: HeroSlide[]) => {
     setHeroSlides(slides);
+    saveStoreDataToCloud({ heroSlides: slides });
   };
 
   const addCollection = (name: string) => {
     if (!name.trim()) return;
     const clean = name.trim();
     if (!collections.includes(clean)) {
-      setCollections((prev) => [...prev, clean]);
+      setCollections((prev) => {
+        const next = [...prev, clean];
+        saveStoreDataToCloud({ collections: next });
+        return next;
+      });
     }
   };
 
   const updateCollection = (oldName: string, newName: string) => {
     if (!newName.trim()) return;
     const clean = newName.trim();
-    setCollections((prev) => prev.map((c) => (c === oldName ? clean : c)));
+    setCollections((prev) => {
+      const nextCols = prev.map((c) => (c === oldName ? clean : c));
+      saveStoreDataToCloud({ collections: nextCols });
+      return nextCols;
+    });
     setProducts((prev) =>
       prev.map((p) => (p.collection === (oldName as any) ? { ...p, collection: clean as any } : p))
     );
   };
 
   const deleteCollection = (name: string) => {
-    setCollections((prev) => prev.filter((c) => c !== name));
+    setCollections((prev) => {
+      const next = prev.filter((c) => c !== name);
+      saveStoreDataToCloud({ collections: next });
+      return next;
+    });
   };
 
   const updateLabPricingConfig = (pricing: Partial<LabPricingConfig>) => {
-    setLabPricingConfig((prev) => ({ ...prev, ...pricing }));
+    setLabPricingConfig((prev) => {
+      const next = { ...prev, ...pricing };
+      saveStoreDataToCloud({ labPricingConfig: next });
+      return next;
+    });
   };
 
   const updateAboutContent = (content: Partial<AboutContent>) => {
@@ -1535,6 +1709,30 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const deletePrayerRequest = (id: string) => {
     setPrayerRequests((prev) => prev.filter((p) => p.id !== id));
+  };
+
+  const syncNowWithCloud = async () => {
+    setIsCloudSyncing(true);
+    try {
+      await saveStoreDataToCloud({
+        brandConfig,
+        products,
+        labPricingConfig,
+        customLabMockups,
+        artworkDesigns,
+        heroSlides,
+        collections,
+        orders,
+      });
+      const latest = await fetchStoreDataFromCloud();
+      if (latest?.updatedAt) {
+        setLastCloudSyncTimestamp(latest.updatedAt);
+      }
+    } catch (e) {
+      console.warn('Sync manual error:', e);
+    } finally {
+      setIsCloudSyncing(false);
+    }
   };
 
   return (
@@ -1660,6 +1858,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         markNotificationRead,
         clearNotifications,
         sendPushNotification,
+        // Cloud Sync (Cross-Device Real-Time)
+        isCloudSyncing,
+        lastCloudSyncTimestamp,
+        syncNowWithCloud,
       }}
     >
       {children}

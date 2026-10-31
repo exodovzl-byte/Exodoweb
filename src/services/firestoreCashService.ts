@@ -16,7 +16,8 @@ import { TreasuryAccounts, CashTransaction } from '../types';
 
 // Initialize Firebase App & Firestore Singleton
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-export const db = getFirestore(app);
+const firestoreDbId = (firebaseConfig as any).firestoreDatabaseId;
+export const db = firestoreDbId ? getFirestore(app, firestoreDbId) : getFirestore(app);
 
 const CASH_BALANCES_DOC = 'treasury_cash_balances';
 const CASH_TRANSACTIONS_COLLECTION = 'cash_transactions';

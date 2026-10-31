@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, ShieldCheck, Key, Lock, AlertCircle } from 'lucide-react';
+import { X, ShieldCheck, Key, Lock, AlertCircle, Eye, EyeOff } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 
 export const AdminLoginModal: React.FC = () => {
@@ -11,6 +11,7 @@ export const AdminLoginModal: React.FC = () => {
   } = useStore();
 
   const [accessKey, setAccessKey] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState(false);
 
   if (!isAdminLoginModalOpen) return null;
@@ -54,34 +55,42 @@ export const AdminLoginModal: React.FC = () => {
           BACKOFFICE ADMINISTRADOR
         </h3>
         <p className="text-xs text-neutral-400 mt-2 mb-6">
-          Ingresa la clave maestra del taller para gestionar el tablero Kanban, productos, tipografías y Google Sheets.
+          Ingresa la contraseña maestra para gestionar el tablero Kanban, productos, tipografías y Google Sheets.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="relative">
             <Key size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-neutral-500" />
             <input
-              type="password"
+              type={showPassword ? 'text' : 'password'}
               autoFocus
-              maxLength={10}
-              placeholder="Clave de Acceso (2412)"
+              maxLength={20}
+              placeholder="Contraseña de Administrador"
               value={accessKey}
               onChange={(e) => {
                 setAccessKey(e.target.value);
                 setError(false);
               }}
-              className={`w-full pl-10 pr-4 py-3 bg-neutral-900 border rounded-xl text-center text-sm font-mono tracking-widest text-white placeholder-neutral-500 focus:outline-none transition-colors ${
+              className={`w-full pl-10 pr-10 py-3 bg-neutral-900 border rounded-xl text-center text-sm font-mono tracking-widest text-white placeholder-neutral-500 focus:outline-none transition-colors ${
                 error
                   ? 'border-red-500 focus:border-red-500 ring-2 ring-red-500/20'
                   : 'border-neutral-800 focus:border-amber-400'
               }`}
             />
+            <button
+              type="button"
+              onClick={() => setShowPassword(!showPassword)}
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-neutral-500 hover:text-neutral-300 transition-colors p-1"
+              title={showPassword ? 'Ocultar contraseña' : 'Ver contraseña'}
+            >
+              {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+            </button>
           </div>
 
           {error && (
             <div className="flex items-center justify-center gap-1.5 text-xs text-red-400 animate-in shake duration-200">
               <AlertCircle size={14} />
-              <span>Clave incorrecta. Recuerda: 2412.</span>
+              <span>Clave incorrecta. Inténtalo de nuevo.</span>
             </div>
           )}
 

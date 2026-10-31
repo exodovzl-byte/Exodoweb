@@ -83,7 +83,7 @@ const MainContent: React.FC = () => {
             <AdminDashboard />
           ) : (
             <div className="py-20 text-center text-sm text-neutral-400">
-              Acceso restringido. Por favor ingresa la clave de administrador 2412.
+              Acceso restringido. Por favor inicia sesión con tu clave de administrador.
             </div>
           )
         )}
