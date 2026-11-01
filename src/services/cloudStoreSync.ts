@@ -10,7 +10,11 @@ import {
   Order, 
   AboutContent, 
   SocialLinks,
-  PartnerSalaryWithdrawal 
+  PartnerSalaryWithdrawal,
+  TreasuryAccounts,
+  CashTransaction,
+  DebtRecord,
+  DailyCashClose
 } from '../types';
 
 export interface StoreCloudState {
@@ -23,6 +27,11 @@ export interface StoreCloudState {
   collections?: string[];
   orders?: Order[];
   partnerWithdrawals?: PartnerSalaryWithdrawal[];
+  exchangeRateBCV?: number;
+  treasuryAccounts?: TreasuryAccounts;
+  transactions?: CashTransaction[];
+  debts?: DebtRecord[];
+  cashCloses?: DailyCashClose[];
   aboutContent?: AboutContent;
   socialLinks?: SocialLinks;
   updatedAt?: string;
@@ -73,11 +82,26 @@ export async function saveStoreDataToCloud(
     if (partialData.collections) {
       localStorage.setItem('exodo_collections', JSON.stringify(partialData.collections));
     }
-    if (partialData.orders) {
+    if (partialData.orders !== undefined) {
       localStorage.setItem('exodo_orders', JSON.stringify(partialData.orders));
     }
-    if (partialData.partnerWithdrawals) {
+    if (partialData.partnerWithdrawals !== undefined) {
       localStorage.setItem('exodo_partner_withdrawals', JSON.stringify(partialData.partnerWithdrawals));
+    }
+    if (partialData.exchangeRateBCV !== undefined) {
+      localStorage.setItem('exodo_exchange_rate_bcv', partialData.exchangeRateBCV.toString());
+    }
+    if (partialData.treasuryAccounts !== undefined) {
+      localStorage.setItem('exodo_treasury_accounts', JSON.stringify(partialData.treasuryAccounts));
+    }
+    if (partialData.transactions !== undefined) {
+      localStorage.setItem('exodo_transactions', JSON.stringify(partialData.transactions));
+    }
+    if (partialData.debts !== undefined) {
+      localStorage.setItem('exodo_debts', JSON.stringify(partialData.debts));
+    }
+    if (partialData.cashCloses !== undefined) {
+      localStorage.setItem('exodo_cash_closes', JSON.stringify(partialData.cashCloses));
     }
     localStorage.setItem(LOCAL_SYNC_TIMESTAMP_KEY, timestamp);
   } catch (e) {

@@ -95,6 +95,48 @@ app.post('/api/send-email', async (req, res) => {
   }
 });
 
+// Live BCV Exchange Rate Proxy (Automated official rate with caching)
+let bcvCache: { rate: number; updatedAt: string; lastFetched: number } | null = null;
+
+app.get('/api/bcv-rate', async (_req, res) => {
+  const now = Date.now();
+  // Cache for 10 minutes to respect API rate limits
+  if (bcvCache && (now - bcvCache.lastFetched) < 10 * 60 * 1000) {
+    return res.json({ success: true, rate: bcvCache.rate, updatedAt: bcvCache.updatedAt, cached: true });
+  }
+
+  try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 6000);
+    const response = await fetch('https://ve.dolarapi.com/v1/dolares/oficial', {
+      signal: controller.signal,
+      headers: { 'Accept': 'application/json' }
+    });
+    clearTimeout(timeout);
+
+    if (response.ok) {
+      const data: any = await response.json();
+      const rawRate = typeof data.promedio === 'number' ? data.promedio : parseFloat(data.promedio);
+      if (rawRate && !isNaN(rawRate) && rawRate > 0) {
+        bcvCache = {
+          rate: Number(rawRate.toFixed(4)),
+          updatedAt: data.fechaActualizacion || new Date().toISOString(),
+          lastFetched: now,
+        };
+        return res.json({ success: true, rate: bcvCache.rate, updatedAt: bcvCache.updatedAt, cached: false });
+      }
+    }
+  } catch (err: any) {
+    console.warn('Error fetching live BCV rate from API:', err?.message || err);
+  }
+
+  if (bcvCache) {
+    return res.json({ success: true, rate: bcvCache.rate, updatedAt: bcvCache.updatedAt, fallback: true });
+  }
+
+  return res.json({ success: false, rate: null, error: 'No se pudo obtener la tasa en vivo del BCV en este momento.' });
+});
+
 // Persistent Store State Storage (Dual backup for cross-device sync)
 const DATA_DIR = path.resolve(__dirname, 'data');
 const STORE_STATE_FILE = path.resolve(DATA_DIR, 'store_state.json');

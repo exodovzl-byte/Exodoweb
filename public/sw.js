@@ -1,5 +1,5 @@
 // Service Worker for ÉXODO PWA (sw.js)
-const CACHE_NAME = 'exodo-pwa-v2';
+const CACHE_NAME = 'exodo-pwa-v3';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
@@ -7,7 +7,9 @@ const PRECACHE_ASSETS = [
   '/icon.svg',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
-  '/apple-touch-icon.png'
+  '/pwa-maskable-512x512.png',
+  '/apple-touch-icon.png',
+  '/favicon.ico'
 ];
 
 self.addEventListener('install', (event) => {

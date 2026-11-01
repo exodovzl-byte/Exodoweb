@@ -110,6 +110,11 @@ interface StoreContextType {
   cartTotalUSD: number;
   cartTotalVES: number;
   exchangeRateBCV: number;
+  updateExchangeRateBCV: (rate: number) => void;
+  fetchBCVRateFromAPI: () => Promise<number | null>;
+  isFetchingBCV: boolean;
+  lastBCVUpdate: string | null;
+  resetTestData: (adminPin?: string) => { success: boolean; error?: string };
 
   // Products
   products: Product[];
@@ -292,7 +297,82 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saved ? JSON.parse(saved) : [];
   });
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const exchangeRateBCV = 46.0; // Current reference rate
+
+  // Tasa Oficial BCV ($ en Venezuela): Sincronizada automáticamente al día y modificable manualmente
+  const [exchangeRateBCV, setExchangeRateBCV] = useState<number>(() => {
+    const saved = localStorage.getItem('exodo_exchange_rate_bcv');
+    if (saved) {
+      const parsed = parseFloat(saved);
+      if (!isNaN(parsed) && parsed > 0) return parsed;
+    }
+    return 52.80;
+  });
+  const [isFetchingBCV, setIsFetchingBCV] = useState<boolean>(false);
+  const [lastBCVUpdate, setLastBCVUpdate] = useState<string | null>(() => {
+    return localStorage.getItem('exodo_bcv_last_update');
+  });
+
+  const updateExchangeRateBCV = (newRate: number) => {
+    if (isNaN(newRate) || newRate <= 0) return;
+    const rounded = Number(newRate.toFixed(4));
+    setExchangeRateBCV(rounded);
+    localStorage.setItem('exodo_exchange_rate_bcv', rounded.toString());
+    const now = new Date().toISOString();
+    setLastBCVUpdate(now);
+    localStorage.setItem('exodo_bcv_last_update', now);
+    saveStoreDataToCloud({ exchangeRateBCV: rounded });
+  };
+
+  const fetchBCVRateFromAPI = async (): Promise<number | null> => {
+    setIsFetchingBCV(true);
+    try {
+      let rate: number | null = null;
+      let dateStr: string = new Date().toISOString();
+      try {
+        const res = await fetch('/api/bcv-rate');
+        if (res.ok) {
+          const json = await res.json();
+          if (json.success && json.rate) {
+            rate = json.rate;
+            dateStr = json.updatedAt || dateStr;
+          }
+        }
+      } catch (e) {
+        console.warn('Proxy /api/bcv-rate no respondió, intentando conexión directa:', e);
+      }
+
+      if (!rate) {
+        const directRes = await fetch('https://ve.dolarapi.com/v1/dolares/oficial');
+        if (directRes.ok) {
+          const directData = await directRes.json();
+          const val = typeof directData.promedio === 'number' ? directData.promedio : parseFloat(directData.promedio);
+          if (val && !isNaN(val) && val > 0) {
+            rate = Number(val.toFixed(4));
+            dateStr = directData.fechaActualizacion || dateStr;
+          }
+        }
+      }
+
+      if (rate && !isNaN(rate) && rate > 0) {
+        setExchangeRateBCV(rate);
+        localStorage.setItem('exodo_exchange_rate_bcv', rate.toString());
+        setLastBCVUpdate(dateStr);
+        localStorage.setItem('exodo_bcv_last_update', dateStr);
+        saveStoreDataToCloud({ exchangeRateBCV: rate });
+        return rate;
+      }
+    } catch (err) {
+      console.warn('Error al consultar tasa en vivo del BCV:', err);
+    } finally {
+      setIsFetchingBCV(false);
+    }
+    return null;
+  };
+
+  // Consulta automática de la tasa BCV al iniciar la app
+  useEffect(() => {
+    fetchBCVRateFromAPI();
+  }, []);
 
   // Products
   const [products, setProducts] = useState<Product[]>(() => {
@@ -300,10 +380,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saved ? JSON.parse(saved) : INITIAL_PRODUCTS;
   });
 
-  // Orders
+  // Orders (Soporta lista vacía [] para tienda limpia lista para estreno)
   const [orders, setOrders] = useState<Order[]>(() => {
     const saved = localStorage.getItem('exodo_orders');
-    return saved ? JSON.parse(saved) : INITIAL_ORDERS;
+    if (saved !== null) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return [];
+      }
+    }
+    return INITIAL_ORDERS;
   });
 
   // Kanban Columns
@@ -579,15 +666,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (cloudData.collections) setCollections(cloudData.collections);
         if (cloudData.aboutContent) setAboutContent(cloudData.aboutContent);
         if (cloudData.socialLinks) setSocialLinks(cloudData.socialLinks);
-        if (cloudData.partnerWithdrawals && cloudData.partnerWithdrawals.length > 0) {
+        if (Array.isArray(cloudData.partnerWithdrawals)) {
           setPartnerWithdrawals(cloudData.partnerWithdrawals);
         }
-        if (cloudData.orders && cloudData.orders.length > 0) {
-          setOrders((prev) => {
-            const remoteMap = new Map(cloudData.orders!.map((o) => [o.orderCode, o]));
-            const localOnly = prev.filter((o) => !remoteMap.has(o.orderCode));
-            return [...cloudData.orders!, ...localOnly];
-          });
+        if (Array.isArray(cloudData.orders)) {
+          setOrders(cloudData.orders);
+        }
+        if (typeof cloudData.exchangeRateBCV === 'number' && cloudData.exchangeRateBCV > 0) {
+          setExchangeRateBCV(cloudData.exchangeRateBCV);
+        }
+        if (cloudData.treasuryAccounts) {
+          setTreasuryAccounts(cloudData.treasuryAccounts);
+        }
+        if (Array.isArray(cloudData.transactions)) {
+          setTransactions(cloudData.transactions);
+        }
+        if (Array.isArray(cloudData.debts)) {
+          setDebts(cloudData.debts);
+        }
+        if (Array.isArray(cloudData.cashCloses)) {
+          setCashCloses(cloudData.cashCloses);
         }
         if (cloudData.updatedAt) setLastCloudSyncTimestamp(cloudData.updatedAt);
         setIsCloudSyncing(false);
@@ -610,8 +708,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (incoming.collections) setCollections(incoming.collections);
       if (incoming.aboutContent) setAboutContent(incoming.aboutContent);
       if (incoming.socialLinks) setSocialLinks(incoming.socialLinks);
-      if (incoming.orders && incoming.orders.length > 0) setOrders(incoming.orders);
-      if (incoming.partnerWithdrawals && incoming.partnerWithdrawals.length > 0) setPartnerWithdrawals(incoming.partnerWithdrawals);
+      if (Array.isArray(incoming.orders)) setOrders(incoming.orders);
+      if (Array.isArray(incoming.partnerWithdrawals)) setPartnerWithdrawals(incoming.partnerWithdrawals);
+      if (typeof incoming.exchangeRateBCV === 'number' && incoming.exchangeRateBCV > 0) setExchangeRateBCV(incoming.exchangeRateBCV);
+      if (incoming.treasuryAccounts) setTreasuryAccounts(incoming.treasuryAccounts);
+      if (Array.isArray(incoming.transactions)) setTransactions(incoming.transactions);
+      if (Array.isArray(incoming.debts)) setDebts(incoming.debts);
+      if (Array.isArray(incoming.cashCloses)) setCashCloses(incoming.cashCloses);
       if (incoming.updatedAt) setLastCloudSyncTimestamp(incoming.updatedAt);
     });
 
@@ -623,7 +726,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (cloudData.products && cloudData.products.length > 0) setProducts(cloudData.products);
         if (cloudData.labPricingConfig) setLabPricingConfig(cloudData.labPricingConfig);
         if (cloudData.customLabMockups) setCustomLabMockups(cloudData.customLabMockups);
-        if (cloudData.partnerWithdrawals && cloudData.partnerWithdrawals.length > 0) setPartnerWithdrawals(cloudData.partnerWithdrawals);
+        if (Array.isArray(cloudData.partnerWithdrawals)) setPartnerWithdrawals(cloudData.partnerWithdrawals);
+        if (Array.isArray(cloudData.orders)) setOrders(cloudData.orders);
+        if (typeof cloudData.exchangeRateBCV === 'number' && cloudData.exchangeRateBCV > 0) setExchangeRateBCV(cloudData.exchangeRateBCV);
+        if (cloudData.treasuryAccounts) setTreasuryAccounts(cloudData.treasuryAccounts);
         if (cloudData.updatedAt) setLastCloudSyncTimestamp(cloudData.updatedAt);
       }).catch(() => {});
     };
@@ -720,7 +826,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     document.documentElement.style.setProperty('--accent-color', brandConfig.accentColor);
 
     // Update PWA / browser favicon & apple-touch-icon dynamically from brand config
-    const customIcon = brandConfig.logoAssets?.appIcon || brandConfig.logoAssets?.appIconSquare || brandConfig.logoAssets?.logoWhite || brandConfig.logoAssets?.logoTransparent;
+    const customIcon = brandConfig.logoAssets?.appIcon || brandConfig.logoAssets?.appIconSquare || brandConfig.logoAssets?.logoWhite || '/assets/aistudio/exodo-appIcon_cbe32977.png';
     if (customIcon) {
       try {
         let iconTag = document.querySelector("link[rel='icon']") as HTMLLinkElement;
@@ -1972,6 +2078,66 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     setPrayerRequests((prev) => prev.filter((p) => p.id !== id));
   };
 
+  const resetTestData = (adminPin?: string): { success: boolean; error?: string } => {
+    if (adminPin !== '2412') {
+      return { success: false, error: 'Código PIN de administrador incorrecto. Ingresa 2412 para confirmar la limpieza.' };
+    }
+
+    console.log('[StoreContext] 🧹 Ejecutando limpieza total de datos de prueba para estreno oficial...');
+    
+    // 1. Reset in-memory orders & financial records to 0
+    setOrders([]);
+    setPartnerWithdrawals([]);
+    setTransactions([]);
+    setDebts([]);
+    setCashCloses([]);
+
+    const zeroAccounts: TreasuryAccounts = {
+      efectivoUSD: 0,
+      efectivoVES: 0,
+      binanceUSDT: 0,
+      bancoDelTesoroVES: 0,
+      lastUpdated: new Date().toISOString(),
+    };
+    setTreasuryAccounts(zeroAccounts);
+
+    // 2. Persist empty clean arrays in localStorage
+    localStorage.setItem('exodo_orders', JSON.stringify([]));
+    localStorage.setItem('exodo_partner_withdrawals', JSON.stringify([]));
+    localStorage.setItem('exodo_cash_transactions', JSON.stringify([]));
+    localStorage.setItem('exodo_debts', JSON.stringify([]));
+    localStorage.setItem('exodo_cash_closes', JSON.stringify([]));
+    localStorage.setItem('exodo_treasury_accounts', JSON.stringify(zeroAccounts));
+
+    // 3. Clear cloud Firestore collections and backend files
+    saveStoreDataToCloud({
+      orders: [],
+      partnerWithdrawals: [],
+      treasuryAccounts: zeroAccounts,
+      transactions: [],
+      debts: [],
+      cashCloses: [],
+    }, 'Administrador (Limpieza de Fábrica Estreno)');
+
+    saveCashBalancesToFirestore(zeroAccounts).catch(() => {});
+
+    // 4. Update backend server file
+    fetch('/api/store-data', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        orders: [],
+        partnerWithdrawals: [],
+        treasuryAccounts: zeroAccounts,
+        transactions: [],
+        debts: [],
+        cashCloses: [],
+      }),
+    }).catch(() => {});
+
+    return { success: true };
+  };
+
   const syncNowWithCloud = async () => {
     setIsCloudSyncing(true);
     try {
@@ -2019,6 +2185,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         cartTotalUSD,
         cartTotalVES,
         exchangeRateBCV,
+        updateExchangeRateBCV,
+        fetchBCVRateFromAPI,
+        isFetchingBCV,
+        lastBCVUpdate,
+        resetTestData,
         products,
         addProduct,
         updateProduct,

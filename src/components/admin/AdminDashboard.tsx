@@ -31,7 +31,8 @@ import {
   Ban,
   Receipt,
   FileCheck,
-  Cloud
+  Cloud,
+  AlertTriangle
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { Product, Order, KanbanColumn, CategoryCircle, ProductCategory, ProductCollection } from '../../types';
@@ -51,6 +52,7 @@ export const AdminDashboard: React.FC = () => {
   const {
     adminLogout,
     orders,
+    partnerWithdrawals,
     updateOrderStatus,
     updateOrderPaymentStatus,
     markOrderDelivered,
@@ -78,6 +80,11 @@ export const AdminDashboard: React.FC = () => {
     lastSyncedTimestamp,
     setLastSyncedTimestamp,
     exchangeRateBCV,
+    updateExchangeRateBCV,
+    fetchBCVRateFromAPI,
+    isFetchingBCV,
+    lastBCVUpdate,
+    resetTestData,
     treasuryAccounts,
     adminNotifications,
     markNotificationRead,
@@ -121,6 +128,18 @@ export const AdminDashboard: React.FC = () => {
   const [newCircleImage, setNewCircleImage] = useState('');
   const [newCircleType, setNewCircleType] = useState<'category' | 'collection'>('collection');
   const [newCircleValue, setNewCircleValue] = useState('');
+
+  // BCV Rate Modal state
+  const [isBcvModalOpen, setIsBcvModalOpen] = useState(false);
+  const [bcvInputVal, setBcvInputVal] = useState<string>(exchangeRateBCV.toString());
+  const [bcvFeedback, setBcvFeedback] = useState<string | null>(null);
+
+  // Reset Test Data Modal state (Limpieza de datos para estreno oficial)
+  const [isResetDataModalOpen, setIsResetDataModalOpen] = useState(false);
+  const [resetPinInput, setResetPinInput] = useState('');
+  const [resetError, setResetError] = useState<string | null>(null);
+  const [resetSuccess, setResetSuccess] = useState<string | null>(null);
+  const [isResetting, setIsResetting] = useState(false);
 
   // ----------------------------------------------------
   // GOOGLE SHEETS SYNC
@@ -291,6 +310,21 @@ export const AdminDashboard: React.FC = () => {
                   <Cloud size={11} className={isCloudSyncing ? 'animate-pulse text-amber-400' : 'text-emerald-400'} />
                   <span className="hidden xs:inline">{isCloudSyncing ? 'Sincronizando...' : 'Nube OK'}</span>
                 </button>
+
+                {/* Reset / Clean Test Data Button */}
+                <button
+                  onClick={() => {
+                    setResetPinInput('');
+                    setResetError(null);
+                    setResetSuccess(null);
+                    setIsResetDataModalOpen(true);
+                  }}
+                  className="px-2 py-0.5 rounded bg-red-500/10 text-red-400 border border-red-500/30 text-[10px] font-mono font-bold flex items-center gap-1 hover:bg-red-500/20 transition-all cursor-pointer"
+                  title="Limpiar datos de prueba para estreno oficial (pedidos, caja, compras a cero)"
+                >
+                  <Trash2 size={11} />
+                  <span className="hidden xs:inline">Limpiar Pruebas</span>
+                </button>
               </div>
             </div>
           </div>
@@ -457,9 +491,35 @@ export const AdminDashboard: React.FC = () => {
             Efectivo: ${treasuryAccounts?.efectivoUSD?.toFixed(2) || '0.00'} USD
           </span>
           <span className="text-neutral-700">•</span>
-          <span className="text-neutral-400 shrink-0">
-            BCV: Bs. {exchangeRateBCV.toFixed(2)}/$
-          </span>
+          {/* Interactive BCV Rate Button */}
+          <button
+            onClick={() => {
+              setBcvInputVal(exchangeRateBCV.toString());
+              setBcvFeedback(null);
+              setIsBcvModalOpen(true);
+            }}
+            className="text-amber-300 font-bold hover:text-amber-200 transition-colors flex items-center gap-1 bg-amber-500/10 border border-amber-500/30 px-2 py-0.5 rounded cursor-pointer shrink-0"
+            title="Tasa oficial BCV automatizada: Haz clic para actualizar en vivo o modificar manualmente"
+          >
+            <span>BCV: Bs. {exchangeRateBCV.toFixed(2)}/$</span>
+            <RefreshCw size={9} className={isFetchingBCV ? 'animate-spin text-amber-400' : 'text-amber-400'} />
+            <Edit3 size={9} />
+          </button>
+          <span className="text-neutral-700">•</span>
+          {/* Quick Clean Data Button */}
+          <button
+            onClick={() => {
+              setResetPinInput('');
+              setResetError(null);
+              setResetSuccess(null);
+              setIsResetDataModalOpen(true);
+            }}
+            className="text-red-400 hover:text-red-300 transition-colors flex items-center gap-1 bg-red-950/40 border border-red-800/40 hover:border-red-700 px-2 py-0.5 rounded cursor-pointer shrink-0 font-bold"
+            title="Borrar pedidos de prueba, compras y consolidado para estreno de app"
+          >
+            <Trash2 size={9} />
+            <span>🧹 Limpiar Datos de Prueba</span>
+          </button>
         </div>
       </div>
 
@@ -1612,6 +1672,265 @@ export const AdminDashboard: React.FC = () => {
           }}
           kanbanColumns={kanbanColumns}
         />
+      )}
+
+      {/* ==================================================== */}
+      {/* MODAL: TASA BCV OFICIAL AUTOMATIZADA & MANUAL        */}
+      {/* ==================================================== */}
+      {isBcvModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-neutral-900 border border-amber-500/30 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 font-bold">
+                  <RefreshCw size={18} className={isFetchingBCV ? 'animate-spin' : ''} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white uppercase tracking-tight font-brand-heading">
+                    Tasa Oficial BCV
+                  </h3>
+                  <p className="text-[11px] text-neutral-400 font-mono">
+                    Banco Central de Venezuela (1$ USD a Bs.)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsBcvModalOpen(false);
+                  setBcvFeedback(null);
+                }}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Current Rate Display */}
+            <div className="p-4 rounded-2xl bg-black/60 border border-neutral-800 text-center space-y-1">
+              <span className="text-[10px] text-neutral-400 uppercase font-mono tracking-wider font-bold">
+                Tasa Activa en el Sistema
+              </span>
+              <div className="text-3xl font-black text-amber-400 font-mono">
+                Bs. {exchangeRateBCV.toFixed(2)}
+                <span className="text-xs text-neutral-400 font-normal ml-1">/ 1$ USD</span>
+              </div>
+              <div className="text-[10px] text-neutral-500 font-mono">
+                {lastBCVUpdate ? `Última sincronización: ${new Date(lastBCVUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Sincronización inicial activa'}
+              </div>
+            </div>
+
+            {/* Feedback notification */}
+            {bcvFeedback && (
+              <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-bold flex items-center gap-2">
+                <Check size={14} className="shrink-0" />
+                <span>{bcvFeedback}</span>
+              </div>
+            )}
+
+            {/* Option 1: Live Sync from Official API */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-neutral-300 block">
+                1. Sincronización Automática en Vivo:
+              </span>
+              <button
+                onClick={async () => {
+                  setBcvFeedback('Consultando API del Banco Central de Venezuela...');
+                  const updatedRate = await fetchBCVRateFromAPI();
+                  if (updatedRate) {
+                    setBcvFeedback(`¡Tasa actualizada en vivo a Bs. ${updatedRate.toFixed(2)}/$ desde el BCV!`);
+                    setBcvInputVal(updatedRate.toString());
+                  } else {
+                    setBcvFeedback('No se pudo conectar con la API en este momento. Puedes fijarla manualmente abajo.');
+                  }
+                }}
+                disabled={isFetchingBCV}
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={isFetchingBCV ? 'animate-spin' : ''} />
+                <span>{isFetchingBCV ? 'Consultando BCV...' : 'Actualizar Tasa BCV Oficial en Vivo'}</span>
+              </button>
+            </div>
+
+            {/* Option 2: Manual Edit */}
+            <div className="space-y-2 pt-3 border-t border-neutral-800">
+              <span className="text-xs font-bold text-neutral-300 block">
+                2. Modificar Tasa Manualmente:
+              </span>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">Bs.</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={bcvInputVal}
+                    onChange={(e) => setBcvInputVal(e.target.value)}
+                    placeholder="Ej. 890.50"
+                    className="w-full pl-9 pr-3 py-2 bg-neutral-950 border border-neutral-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    const parsed = parseFloat(bcvInputVal);
+                    if (isNaN(parsed) || parsed <= 0) {
+                      setBcvFeedback('Por favor ingresa un monto válido mayor a 0');
+                      return;
+                    }
+                    updateExchangeRateBCV(parsed);
+                    setBcvFeedback(`Tasa establecida manualmente a Bs. ${parsed.toFixed(2)}`);
+                  }}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl text-xs font-bold uppercase transition-all cursor-pointer"
+                >
+                  Guardar
+                </button>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-neutral-400 leading-relaxed font-mono">
+              Nota: Esta tasa aplica automáticamente en todo el sistema: catálogo de productos, personalizador de franelas, cobros por Pago Móvil y consolidación de tesorería.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ==================================================== */}
+      {/* MODAL: LIMPIAR DATOS DE PRUEBA (ESTRENO OFICIAL)     */}
+      {/* ==================================================== */}
+      {isResetDataModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="bg-neutral-950 border border-red-500/40 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 font-bold">
+                  <AlertTriangle size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white uppercase tracking-tight font-brand-heading">
+                    Limpieza de Datos de Prueba
+                  </h3>
+                  <p className="text-[11px] text-red-400 font-mono">
+                    Preparación para Estreno Público Oficial
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setIsResetDataModalOpen(false);
+                  setResetError(null);
+                  setResetSuccess(null);
+                  setResetPinInput('');
+                }}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Warning Message Box */}
+            <div className="p-4 rounded-2xl bg-red-950/30 border border-red-800/50 space-y-2 text-xs text-neutral-300">
+              <p className="font-bold text-red-300 flex items-center gap-1.5">
+                <AlertTriangle size={14} className="shrink-0 text-red-400" />
+                <span>¿Deseas reiniciar la contabilidad y pedidos a $0.00?</span>
+              </p>
+              <p className="text-[11px] leading-relaxed text-neutral-300">
+                Esta acción borrará de manera definitiva los registros de prueba generados durante las pruebas técnicas para que comiences con una contabilidad exacta el día del lanzamiento.
+              </p>
+              <ul className="text-[11px] font-mono space-y-1 pt-1 text-neutral-400 border-t border-red-900/40">
+                <li>• <strong className="text-white">Pedidos registrados:</strong> {orders.length} pedidos de prueba → <span className="text-red-400">0</span></li>
+                <li>• <strong className="text-white">Retiros de socios:</strong> {partnerWithdrawals.length} retiros → <span className="text-red-400">0</span></li>
+                <li>• <strong className="text-white">Saldos de caja:</strong> Binance, Tesoro y Efectivo físico → <span className="text-red-400">$0.00</span></li>
+                <li>• <strong className="text-white">Facturación y total consolidado:</strong> → <span className="text-red-400">$0.00</span></li>
+              </ul>
+            </div>
+
+            {/* Feedback / Errors */}
+            {resetError && (
+              <div className="p-3 rounded-xl bg-red-950/60 border border-red-700/60 text-red-300 text-xs font-mono font-bold flex items-center gap-2">
+                <AlertTriangle size={14} className="shrink-0 text-red-400" />
+                <span>{resetError}</span>
+              </div>
+            )}
+
+            {resetSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-700/60 text-emerald-300 text-xs font-mono font-bold flex items-center gap-2">
+                <Check size={14} className="shrink-0 text-emerald-400" />
+                <span>{resetSuccess}</span>
+              </div>
+            )}
+
+            {!resetSuccess ? (
+              <div className="space-y-4 pt-1">
+                <div>
+                  <label className="text-xs font-bold text-neutral-300 block mb-1.5">
+                    Ingresa la clave de administrador para confirmar:
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={resetPinInput}
+                    onChange={(e) => {
+                      setResetPinInput(e.target.value);
+                      setResetError(null);
+                    }}
+                    placeholder="Clave de administrador"
+                    className="w-full px-4 py-2.5 bg-neutral-900 border border-neutral-700 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-red-400"
+                  />
+                </div>
+
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={() => {
+                      setIsResetDataModalOpen(false);
+                      setResetPinInput('');
+                      setResetError(null);
+                    }}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-400 font-bold text-xs uppercase transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!resetPinInput) {
+                        setResetError('Por favor ingresa la clave de administrador');
+                        return;
+                      }
+                      setIsResetting(true);
+                      const ok = resetTestData(resetPinInput);
+                      setIsResetting(false);
+                      if (ok) {
+                        setResetSuccess('¡Todos los pedidos, registros y montos de prueba fueron limpiados a $0.00! Tu app está lista para el estreno oficial.');
+                        setResetPinInput('');
+                        setTimeout(() => {
+                          setIsResetDataModalOpen(false);
+                          setResetSuccess(null);
+                        }, 2500);
+                      } else {
+                        setResetError('Clave de administrador incorrecta. Solo el administrador autorizado puede reiniciar la base de datos.');
+                      }
+                    }}
+                    disabled={isResetting}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg disabled:opacity-50"
+                  >
+                    <Trash2 size={14} />
+                    <span>{isResetting ? 'Limpiando...' : 'Confirmar y Reiniciar'}</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    setIsResetDataModalOpen(false);
+                    setResetSuccess(null);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Entendido / Continuar
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
     </div>

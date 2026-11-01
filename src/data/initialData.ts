@@ -748,10 +748,10 @@ export const INITIAL_BRAND_CONFIG: BrandConfig = {
   activeLogoColorVariant: 'white',
   logoAssets: {
     logoBlack: null,
-    logoWhite: null,
+    logoWhite: '/assets/aistudio/exodo-appIcon_cbe32977.png',
     logoTransparent: null,
-    appIcon: null,
-    appIconSquare: null,
+    appIcon: '/assets/aistudio/exodo-appIcon_cbe32977.png',
+    appIconSquare: '/assets/aistudio/exodo-appIcon_cbe32977.png',
   },
   customFontName: 'Bebas Neue',
   customFontUrl: null,

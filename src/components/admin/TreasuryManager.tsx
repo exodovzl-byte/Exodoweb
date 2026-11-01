@@ -33,7 +33,8 @@ import {
   Percent,
   Calendar,
   ArrowRight,
-  UserCheck
+  UserCheck,
+  Trash2
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { CashTransaction, DebtRecord } from '../../types';
@@ -52,6 +53,11 @@ export const TreasuryManager: React.FC = () => {
     deleteDebt,
     cashCloses,
     exchangeRateBCV,
+    updateExchangeRateBCV,
+    fetchBCVRateFromAPI,
+    isFetchingBCV,
+    lastBCVUpdate,
+    resetTestData,
     orders,
     partnerWithdrawals,
     recordPartnerWithdrawal,
@@ -60,6 +66,18 @@ export const TreasuryManager: React.FC = () => {
   } = useStore();
 
   const [activeSubTab, setActiveSubTab] = useState<'overview' | 'financial_split' | 'cash_box' | 'debts' | 'transactions' | 'closes'>('financial_split');
+
+  // BCV Modal state
+  const [bcvModalOpen, setBcvModalOpen] = useState(false);
+  const [bcvInputVal, setBcvInputVal] = useState<string>(exchangeRateBCV.toString());
+  const [bcvFeedback, setBcvFeedback] = useState<string | null>(null);
+
+  // Clean Test Data Modal state
+  const [cleanModalOpen, setCleanModalOpen] = useState(false);
+  const [cleanPin, setCleanPin] = useState('');
+  const [cleanError, setCleanError] = useState<string | null>(null);
+  const [cleanSuccess, setCleanSuccess] = useState<string | null>(null);
+  const [isCleaning, setIsCleaning] = useState(false);
 
   // Manual Adjust Modal
   const [adjustModalOpen, setAdjustModalOpen] = useState(false);
@@ -429,6 +447,33 @@ export const TreasuryManager: React.FC = () => {
               <CreditCard size={14} />
               <span>+ Deuda / Crédito</span>
             </button>
+
+            <button
+              onClick={() => {
+                setBcvInputVal(exchangeRateBCV.toString());
+                setBcvFeedback(null);
+                setBcvModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-amber-500/10 hover:bg-amber-500/20 text-amber-300 border border-amber-500/30 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md"
+              title="Ajustar o actualizar tasa oficial BCV"
+            >
+              <RefreshCw size={14} className={isFetchingBCV ? 'animate-spin text-amber-400' : ''} />
+              <span>Tasa BCV: Bs. {exchangeRateBCV.toFixed(2)}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                setCleanPin('');
+                setCleanError(null);
+                setCleanSuccess(null);
+                setCleanModalOpen(true);
+              }}
+              className="flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-red-950/60 hover:bg-red-900 text-red-300 border border-red-800/80 text-xs font-bold uppercase tracking-wider transition-all cursor-pointer shadow-md"
+              title="Limpiar datos de prueba para estreno oficial de la app"
+            >
+              <AlertCircle size={14} />
+              <span>🧹 Limpiar Datos de Prueba</span>
+            </button>
           </div>
         </div>
       </div>
@@ -449,9 +494,20 @@ export const TreasuryManager: React.FC = () => {
               ~ Bs. {(totalConsolidatedUSD * exchangeRateBCV).toFixed(2)}
             </span>
           </div>
-          <div className="mt-3 pt-2.5 border-t border-neutral-800 text-[10px] text-neutral-500 font-mono flex items-center justify-between">
-            <span>Tasa BCV: {exchangeRateBCV.toFixed(2)}</span>
-            <span className="text-emerald-400 font-bold">Activo</span>
+          <div className="mt-3 pt-2.5 border-t border-neutral-800 text-[10px] text-neutral-400 font-mono flex items-center justify-between">
+            <button
+              onClick={() => {
+                setBcvInputVal(exchangeRateBCV.toString());
+                setBcvFeedback(null);
+                setBcvModalOpen(true);
+              }}
+              className="text-amber-400 hover:text-amber-300 font-bold flex items-center gap-1 cursor-pointer transition-colors"
+              title="Ajustar o sincronizar tasa oficial BCV"
+            >
+              <span>BCV: {exchangeRateBCV.toFixed(2)}</span>
+              <RefreshCw size={10} className={isFetchingBCV ? 'animate-spin' : ''} />
+            </button>
+            <span className="text-emerald-400 font-bold">Oficial</span>
           </div>
         </div>
 
@@ -2593,6 +2649,261 @@ export const TreasuryManager: React.FC = () => {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: TASA OFICIAL BCV (VENEZUELA) */}
+      {bcvModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in">
+          <div className="bg-neutral-900 border border-amber-500/30 rounded-3xl p-6 max-w-md w-full shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-amber-500/10 text-amber-400 border border-amber-500/30 font-bold">
+                  <RefreshCw size={18} className={isFetchingBCV ? 'animate-spin' : ''} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white uppercase tracking-tight font-brand-heading">
+                    Tasa Oficial BCV
+                  </h3>
+                  <p className="text-[11px] text-neutral-400 font-mono">
+                    Banco Central de Venezuela (1$ USD a Bs.)
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setBcvModalOpen(false);
+                  setBcvFeedback(null);
+                }}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Current Rate Display */}
+            <div className="p-4 rounded-2xl bg-black/60 border border-neutral-800 text-center space-y-1">
+              <span className="text-[10px] text-neutral-400 uppercase font-mono tracking-wider font-bold">
+                Tasa Activa en Tesorería
+              </span>
+              <div className="text-3xl font-black text-amber-400 font-mono">
+                Bs. {exchangeRateBCV.toFixed(2)}
+                <span className="text-xs text-neutral-400 font-normal ml-1">/ 1$ USD</span>
+              </div>
+              <div className="text-[10px] text-neutral-500 font-mono">
+                {lastBCVUpdate ? `Última sincronización: ${new Date(lastBCVUpdate).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}` : 'Sincronización inicial activa'}
+              </div>
+            </div>
+
+            {/* Feedback notification */}
+            {bcvFeedback && (
+              <div className="p-3 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-mono font-bold flex items-center gap-2">
+                <Check size={14} className="shrink-0" />
+                <span>{bcvFeedback}</span>
+              </div>
+            )}
+
+            {/* Option 1: Live Sync from Official API */}
+            <div className="space-y-2">
+              <span className="text-xs font-bold text-neutral-300 block">
+                1. Sincronización Automática Oficial:
+              </span>
+              <button
+                onClick={async () => {
+                  setBcvFeedback('Consultando API del Banco Central de Venezuela...');
+                  const updatedRate = await fetchBCVRateFromAPI();
+                  if (updatedRate) {
+                    setBcvFeedback(`¡Tasa actualizada en vivo a Bs. ${updatedRate.toFixed(2)}/$ desde el BCV!`);
+                    setBcvInputVal(updatedRate.toString());
+                  } else {
+                    setBcvFeedback('No se pudo conectar con la API en este momento. Puedes fijarla manualmente abajo.');
+                  }
+                }}
+                disabled={isFetchingBCV}
+                className="w-full py-2.5 px-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-black font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg disabled:opacity-50"
+              >
+                <RefreshCw size={14} className={isFetchingBCV ? 'animate-spin' : ''} />
+                <span>{isFetchingBCV ? 'Consultando BCV...' : 'Actualizar Tasa BCV Oficial en Vivo'}</span>
+              </button>
+            </div>
+
+            {/* Option 2: Manual Edit */}
+            <div className="space-y-2 pt-3 border-t border-neutral-800">
+              <span className="text-xs font-bold text-neutral-300 block">
+                2. Modificar Tasa Manualmente:
+              </span>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-neutral-500 font-mono text-xs">Bs.</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    min="1"
+                    value={bcvInputVal}
+                    onChange={(e) => setBcvInputVal(e.target.value)}
+                    placeholder="Ej. 890.50"
+                    className="w-full pl-9 pr-3 py-2 bg-neutral-950 border border-neutral-700 rounded-xl text-white font-mono text-xs focus:outline-none focus:border-amber-400"
+                  />
+                </div>
+                <button
+                  onClick={() => {
+                    const parsed = parseFloat(bcvInputVal);
+                    if (isNaN(parsed) || parsed <= 0) {
+                      setBcvFeedback('Por favor ingresa un monto válido mayor a 0');
+                      return;
+                    }
+                    updateExchangeRateBCV(parsed);
+                    setBcvFeedback(`Tasa establecida manualmente a Bs. ${parsed.toFixed(2)}`);
+                  }}
+                  className="px-4 py-2 bg-neutral-800 hover:bg-neutral-700 text-white rounded-xl text-xs font-bold uppercase transition-all cursor-pointer"
+                >
+                  Guardar
+                </button>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-neutral-400 leading-relaxed font-mono">
+              Nota: Modificar la tasa recalcula automáticamente la conversión a bolívares de tus fondos en divisas y los precios en catálogo.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: LIMPIEZA DE DATOS DE PRUEBA */}
+      {cleanModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="bg-neutral-950 border border-red-500/40 rounded-3xl p-6 max-w-lg w-full shadow-2xl space-y-5">
+            <div className="flex items-center justify-between pb-3 border-b border-neutral-800">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 rounded-xl bg-red-500/10 text-red-400 border border-red-500/30 font-bold">
+                  <AlertCircle size={20} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black text-white uppercase tracking-tight font-brand-heading">
+                    Limpiar Registros de Prueba
+                  </h3>
+                  <p className="text-[11px] text-red-400 font-mono">
+                    Reinicio Contable a $0.00 para Estreno
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  setCleanModalOpen(false);
+                  setCleanPin('');
+                  setCleanError(null);
+                  setCleanSuccess(null);
+                }}
+                className="p-1.5 rounded-lg text-neutral-400 hover:text-white hover:bg-neutral-800 transition-colors"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Warning Message Box */}
+            <div className="p-4 rounded-2xl bg-red-950/30 border border-red-800/50 space-y-2 text-xs text-neutral-300">
+              <p className="font-bold text-red-300 flex items-center gap-1.5">
+                <AlertCircle size={14} className="shrink-0 text-red-400" />
+                <span>¿Deseas reiniciar la contabilidad y pedidos a $0.00?</span>
+              </p>
+              <p className="text-[11px] leading-relaxed text-neutral-300">
+                Esta acción borrará de manera definitiva los pedidos de prueba, compras ficticias, acumulados facturados, retiros y saldos de caja para comenzar con contabilidad 100% exacta.
+              </p>
+              <ul className="text-[11px] font-mono space-y-1 pt-1 text-neutral-400 border-t border-red-900/40">
+                <li>• <strong className="text-white">Pedidos registrados:</strong> {orders.length} pedidos → <span className="text-red-400">0</span></li>
+                <li>• <strong className="text-white">Retiros de socios:</strong> {partnerWithdrawals.length} retiros → <span className="text-red-400">0</span></li>
+                <li>• <strong className="text-white">Total consolidado actual:</strong> ${totalConsolidatedUSD.toFixed(2)} → <span className="text-red-400">$0.00</span></li>
+                <li>• <strong className="text-white">Saldos de caja:</strong> Binance, Tesoro y Efectivo → <span className="text-red-400">$0.00</span></li>
+              </ul>
+            </div>
+
+            {/* Feedback / Errors */}
+            {cleanError && (
+              <div className="p-3 rounded-xl bg-red-950/60 border border-red-700/60 text-red-300 text-xs font-mono font-bold flex items-center gap-2">
+                <AlertCircle size={14} className="shrink-0 text-red-400" />
+                <span>{cleanError}</span>
+              </div>
+            )}
+
+            {cleanSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-950/60 border border-emerald-700/60 text-emerald-300 text-xs font-mono font-bold flex items-center gap-2">
+                <Check size={14} className="shrink-0 text-emerald-400" />
+                <span>{cleanSuccess}</span>
+              </div>
+            )}
+
+            {!cleanSuccess ? (
+              <div className="space-y-4 pt-1">
+                <div>
+                  <label className="text-xs font-bold text-neutral-300 block mb-1.5">
+                    Ingresa la clave de administrador para confirmar:
+                  </label>
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={cleanPin}
+                    onChange={(e) => {
+                      setCleanPin(e.target.value);
+                      setCleanError(null);
+                    }}
+                    placeholder="Clave de administrador"
+                    className="w-full px-4 py-2.5 bg-neutral-900 border border-neutral-700 rounded-xl text-white text-xs font-mono focus:outline-none focus:border-red-400"
+                  />
+                </div>
+
+                <div className="flex gap-2.5">
+                  <button
+                    onClick={() => {
+                      setCleanModalOpen(false);
+                      setCleanPin('');
+                      setCleanError(null);
+                    }}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-400 font-bold text-xs uppercase transition-all cursor-pointer"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={() => {
+                      if (!cleanPin) {
+                        setCleanError('Por favor ingresa la clave de administrador');
+                        return;
+                      }
+                      setIsCleaning(true);
+                      const ok = resetTestData(cleanPin);
+                      setIsCleaning(false);
+                      if (ok) {
+                        setCleanSuccess('¡Todos los pedidos, registros y montos de prueba fueron limpiados a $0.00! Tu app está lista para el estreno oficial.');
+                        setCleanPin('');
+                        setTimeout(() => {
+                          setCleanModalOpen(false);
+                          setCleanSuccess(null);
+                        }, 2500);
+                      } else {
+                        setCleanError('Clave de administrador incorrecta. Solo el administrador autorizado puede reiniciar la base de datos.');
+                      }
+                    }}
+                    disabled={isCleaning}
+                    className="flex-1 py-2.5 px-4 rounded-xl bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all cursor-pointer shadow-lg disabled:opacity-50"
+                  >
+                    <Trash2 size={14} />
+                    <span>{isCleaning ? 'Limpiando...' : 'Confirmar y Reiniciar'}</span>
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="pt-2">
+                <button
+                  onClick={() => {
+                    setCleanModalOpen(false);
+                    setCleanSuccess(null);
+                  }}
+                  className="w-full py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-black font-black text-xs uppercase tracking-wider transition-all cursor-pointer"
+                >
+                  Entendido / Continuar
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
