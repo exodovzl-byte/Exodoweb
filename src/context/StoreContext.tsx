@@ -649,13 +649,38 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     let isMounted = true;
     setIsCloudSyncing(true);
 
-    // 1. Initial Cloud State Hydration
+    // 1. Initial Cloud State Hydration with Local Timestamp Protection
     fetchStoreDataFromCloud()
       .then((cloudData) => {
         if (!isMounted || !cloudData) {
           setIsCloudSyncing(false);
           return;
         }
+
+        const localSyncTime = localStorage.getItem('exodo_cloud_sync_timestamp');
+        // If local changes were made MORE RECENTLY than this cloud snapshot, do not overwrite local state!
+        if (localSyncTime && cloudData.updatedAt && new Date(localSyncTime) > new Date(cloudData.updatedAt)) {
+          console.log('[StoreContext] 💾 Cambios locales son más recientes que la nube, conservando estado local y sincronizando a la nube...');
+          setIsCloudSyncing(false);
+          saveStoreDataToCloud({
+            products,
+            artworkDesigns,
+            brandConfig,
+            orders,
+            labPricingConfig,
+            customLabMockups,
+            heroSlides,
+            collections,
+            partnerWithdrawals,
+            exchangeRateBCV,
+            treasuryAccounts,
+            transactions,
+            debts,
+            cashCloses,
+          });
+          return;
+        }
+
         console.log('[StoreContext] ☁️ Sincronizando datos de la tienda desde la nube...');
         if (cloudData.brandConfig) setBrandConfig(cloudData.brandConfig);
         if (cloudData.products && cloudData.products.length > 0) setProducts(cloudData.products);
@@ -687,7 +712,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (Array.isArray(cloudData.cashCloses)) {
           setCashCloses(cloudData.cashCloses);
         }
-        if (cloudData.updatedAt) setLastCloudSyncTimestamp(cloudData.updatedAt);
+        if (cloudData.updatedAt) {
+          setLastCloudSyncTimestamp(cloudData.updatedAt);
+          localStorage.setItem('exodo_cloud_sync_timestamp', cloudData.updatedAt);
+        }
         setIsCloudSyncing(false);
       })
       .catch((err) => {
@@ -698,6 +726,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     // 2. Real-time Subscription (Firestore WebSocket push across devices)
     const unsubscribe = subscribeToStoreDataCloud((incoming) => {
       if (!isMounted || !incoming) return;
+      const localSyncTime = localStorage.getItem('exodo_cloud_sync_timestamp');
+      if (localSyncTime && incoming.updatedAt && new Date(localSyncTime) > new Date(incoming.updatedAt)) {
+        console.log('[StoreContext] ⚡ Nube envió evento desactualizado, ignorando...');
+        return;
+      }
+
       console.log('[StoreContext] ⚡ Nube actualizada en otro dispositivo, aplicando cambios locales...');
       if (incoming.brandConfig) setBrandConfig(incoming.brandConfig);
       if (incoming.products && incoming.products.length > 0) setProducts(incoming.products);
@@ -715,22 +749,33 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (Array.isArray(incoming.transactions)) setTransactions(incoming.transactions);
       if (Array.isArray(incoming.debts)) setDebts(incoming.debts);
       if (Array.isArray(incoming.cashCloses)) setCashCloses(incoming.cashCloses);
-      if (incoming.updatedAt) setLastCloudSyncTimestamp(incoming.updatedAt);
+      if (incoming.updatedAt) {
+        setLastCloudSyncTimestamp(incoming.updatedAt);
+        localStorage.setItem('exodo_cloud_sync_timestamp', incoming.updatedAt);
+      }
     });
 
     // 3. Re-check on window focus (e.g., when returning to app on mobile)
     const onFocus = () => {
       fetchStoreDataFromCloud().then((cloudData) => {
         if (!isMounted || !cloudData) return;
+        const localSyncTime = localStorage.getItem('exodo_cloud_sync_timestamp');
+        if (localSyncTime && cloudData.updatedAt && new Date(localSyncTime) > new Date(cloudData.updatedAt)) {
+          return;
+        }
         if (cloudData.brandConfig) setBrandConfig(cloudData.brandConfig);
         if (cloudData.products && cloudData.products.length > 0) setProducts(cloudData.products);
         if (cloudData.labPricingConfig) setLabPricingConfig(cloudData.labPricingConfig);
         if (cloudData.customLabMockups) setCustomLabMockups(cloudData.customLabMockups);
+        if (cloudData.artworkDesigns) setArtworkDesigns(cloudData.artworkDesigns);
         if (Array.isArray(cloudData.partnerWithdrawals)) setPartnerWithdrawals(cloudData.partnerWithdrawals);
         if (Array.isArray(cloudData.orders)) setOrders(cloudData.orders);
         if (typeof cloudData.exchangeRateBCV === 'number' && cloudData.exchangeRateBCV > 0) setExchangeRateBCV(cloudData.exchangeRateBCV);
         if (cloudData.treasuryAccounts) setTreasuryAccounts(cloudData.treasuryAccounts);
-        if (cloudData.updatedAt) setLastCloudSyncTimestamp(cloudData.updatedAt);
+        if (cloudData.updatedAt) {
+          setLastCloudSyncTimestamp(cloudData.updatedAt);
+          localStorage.setItem('exodo_cloud_sync_timestamp', cloudData.updatedAt);
+        }
       }).catch(() => {});
     };
     window.addEventListener('focus', onFocus);
@@ -960,6 +1005,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const addProduct = (product: Product) => {
     setProducts((prev) => {
       const next = [product, ...prev];
+      try {
+        localStorage.setItem('exodo_products', JSON.stringify(next));
+        localStorage.setItem('exodo_cloud_sync_timestamp', new Date().toISOString());
+      } catch (e) {}
       saveStoreDataToCloud({ products: next });
       return next;
     });
@@ -968,6 +1017,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const updateProduct = (product: Product) => {
     setProducts((prev) => {
       const next = prev.map((p) => (p.id === product.id ? product : p));
+      try {
+        localStorage.setItem('exodo_products', JSON.stringify(next));
+        localStorage.setItem('exodo_cloud_sync_timestamp', new Date().toISOString());
+      } catch (e) {}
       saveStoreDataToCloud({ products: next });
       return next;
     });
@@ -976,6 +1029,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const deleteProduct = (id: string) => {
     setProducts((prev) => {
       const next = prev.filter((p) => p.id !== id);
+      try {
+        localStorage.setItem('exodo_products', JSON.stringify(next));
+        localStorage.setItem('exodo_cloud_sync_timestamp', new Date().toISOString());
+      } catch (e) {}
       saveStoreDataToCloud({ products: next });
       return next;
     });
@@ -1928,22 +1985,74 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   const addArtworkDesign = (design: ArtworkDesign) => {
     setArtworkDesigns((prev) => {
       const next = [design, ...prev];
+      try {
+        localStorage.setItem('exodo_artwork_library', JSON.stringify(next));
+        localStorage.setItem('exodo_cloud_sync_timestamp', new Date().toISOString());
+      } catch (e) {}
       saveStoreDataToCloud({ artworkDesigns: next });
       return next;
     });
+
+    if (design.associatedProductId && design.highResGraphic) {
+      setProducts((prev) => {
+        const next = prev.map((p) =>
+          p.id === design.associatedProductId
+            ? { ...p, images: [design.highResGraphic, ...p.images.slice(1)] }
+            : p
+        );
+        try {
+          localStorage.setItem('exodo_products', JSON.stringify(next));
+        } catch (e) {}
+        saveStoreDataToCloud({ products: next });
+        return next;
+      });
+    }
   };
 
   const updateArtworkDesign = (id: string, updates: Partial<ArtworkDesign>) => {
+    let targetAssociatedProdId: string | undefined = updates.associatedProductId;
+    let newGraphic: string | undefined = updates.highResGraphic;
+
     setArtworkDesigns((prev) => {
-      const next = prev.map((art) => (art.id === id ? { ...art, ...updates } : art));
+      const next = prev.map((art) => {
+        if (art.id === id) {
+          if (!targetAssociatedProdId) targetAssociatedProdId = art.associatedProductId;
+          if (!newGraphic) newGraphic = art.highResGraphic;
+          return { ...art, ...updates };
+        }
+        return art;
+      });
+      try {
+        localStorage.setItem('exodo_artwork_library', JSON.stringify(next));
+        localStorage.setItem('exodo_cloud_sync_timestamp', new Date().toISOString());
+      } catch (e) {}
       saveStoreDataToCloud({ artworkDesigns: next });
       return next;
     });
+
+    if (targetAssociatedProdId && newGraphic) {
+      setProducts((prev) => {
+        const next = prev.map((p) =>
+          p.id === targetAssociatedProdId
+            ? { ...p, images: [newGraphic!, ...p.images.slice(1)] }
+            : p
+        );
+        try {
+          localStorage.setItem('exodo_products', JSON.stringify(next));
+        } catch (e) {}
+        saveStoreDataToCloud({ products: next });
+        return next;
+      });
+    }
   };
 
   const deleteArtworkDesign = (id: string) => {
     setArtworkDesigns((prev) => {
       const next = prev.filter((art) => art.id !== id);
+      try {
+        localStorage.setItem('exodo_artwork_library', JSON.stringify(next));
+        localStorage.setItem('exodo_cloud_sync_timestamp', new Date().toISOString());
+      } catch (e) {}
       saveStoreDataToCloud({ artworkDesigns: next });
       return next;
     });

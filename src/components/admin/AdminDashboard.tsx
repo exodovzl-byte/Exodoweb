@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { 
   ShieldCheck, 
   LogOut, 
@@ -47,6 +47,7 @@ import { CashCloseModal } from './CashCloseModal';
 import { OrderDetailModal } from './OrderDetailModal';
 import { ManualOrderModal } from './ManualOrderModal';
 import { CustomLabAdminConfig } from './CustomLabAdminConfig';
+import { compressImageFile } from '../../utils/imageCompressor';
 
 export const AdminDashboard: React.FC = () => {
   const {
@@ -116,6 +117,43 @@ export const AdminDashboard: React.FC = () => {
   // Product Add / Edit Modal
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productImageInput, setProductImageInput] = useState<string>('');
+  const [isAssetPickerOpen, setIsAssetPickerOpen] = useState<boolean>(false);
+  const [isUploadingProductImage, setIsUploadingProductImage] = useState<boolean>(false);
+  const productFileInputRef = useRef<HTMLInputElement | null>(null);
+
+  const handleOpenAddProduct = () => {
+    setEditingProduct(null);
+    setProductImageInput('/src/assets/images/franela_oversize_1791054727426.jpg');
+    setIsAssetPickerOpen(false);
+    setIsProductModalOpen(true);
+  };
+
+  const handleOpenEditProduct = (prod: Product) => {
+    setEditingProduct(prod);
+    setProductImageInput(prod.images[0] || '/src/assets/images/franela_oversize_1791054727426.jpg');
+    setIsAssetPickerOpen(false);
+    setIsProductModalOpen(true);
+  };
+
+  const handleProductImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      alert('Por favor selecciona un archivo de imagen válido.');
+      return;
+    }
+    try {
+      setIsUploadingProductImage(true);
+      const compressed = await compressImageFile(file, 1200, 0.88);
+      setProductImageInput(compressed);
+    } catch (err) {
+      console.error('Error optimizando imagen de producto:', err);
+      alert('Error al procesar la imagen.');
+    } finally {
+      setIsUploadingProductImage(false);
+    }
+  };
 
   // Google Sheets state
   const [isGoogleSignedIn, setIsGoogleSignedIn] = useState(false);
@@ -225,7 +263,7 @@ export const AdminDashboard: React.FC = () => {
     const discountPriceRaw = formData.get('discountPrice') as string;
     const discountPrice = discountPriceRaw ? parseFloat(discountPriceRaw) : undefined;
     const oversizePriceDelta = parseFloat(formData.get('oversizePriceDelta') as string) || 0;
-    const imageUrl = (formData.get('imageUrl') as string) || '/src/assets/images/franela_oversize_1791054727426.jpg';
+    const imageUrl = productImageInput.trim() || (formData.get('imageUrl') as string) || '/src/assets/images/franela_oversize_1791054727426.jpg';
     const scripture = formData.get('scripture') as string;
     const unifiedDescription = formData.get('unifiedDescription') as string;
     const stock = parseInt(formData.get('stock') as string) || 20;
@@ -903,11 +941,8 @@ export const AdminDashboard: React.FC = () => {
                 </button>
 
                 <button
-                  onClick={() => {
-                    setEditingProduct(null);
-                    setIsProductModalOpen(true);
-                  }}
-                  className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-extrabold uppercase rounded-lg shadow-lg active:scale-95"
+                  onClick={handleOpenAddProduct}
+                  className="flex items-center gap-1.5 px-3.5 py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-extrabold uppercase rounded-lg shadow-lg active:scale-95 cursor-pointer"
                 >
                   <Plus size={15} />
                   <span>+ Nuevo</span>
@@ -969,11 +1004,8 @@ export const AdminDashboard: React.FC = () => {
 
                   <div className="flex items-center gap-2 pt-1 border-t border-neutral-850">
                     <button
-                      onClick={() => {
-                        setEditingProduct(prod);
-                        setIsProductModalOpen(true);
-                      }}
-                      className="flex-1 py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-neutral-700 transition-colors"
+                      onClick={() => handleOpenEditProduct(prod)}
+                      className="flex-1 py-2 px-3 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-white text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-neutral-700 transition-colors cursor-pointer"
                     >
                       <Edit3 size={13} className="text-amber-400" />
                       <span>Editar</span>
@@ -1065,11 +1097,8 @@ export const AdminDashboard: React.FC = () => {
 
                       <td className="py-3 px-4 text-right space-x-1">
                         <button
-                          onClick={() => {
-                            setEditingProduct(prod);
-                            setIsProductModalOpen(true);
-                          }}
-                          className="p-1.5 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white"
+                          onClick={() => handleOpenEditProduct(prod)}
+                          className="p-1.5 rounded hover:bg-neutral-800 text-neutral-300 hover:text-white cursor-pointer"
                           title="Editar producto"
                         >
                           <Edit3 size={14} />
@@ -1546,25 +1575,148 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-neutral-300 block mb-1 font-bold">Stock Inicial</label>
-                  <input
-                    name="stock"
-                    type="number"
-                    defaultValue={editingProduct?.stock || 30}
-                    className="w-full p-2.5 rounded bg-neutral-900 border border-neutral-800 text-white font-mono"
-                  />
+              <div>
+                <label className="text-neutral-300 block mb-1 font-bold">Stock Disponible (Unidades)</label>
+                <input
+                  name="stock"
+                  type="number"
+                  defaultValue={editingProduct?.stock || 30}
+                  className="w-full p-2.5 rounded bg-neutral-900 border border-neutral-800 text-white font-mono"
+                />
+              </div>
+
+              {/* Imagen Principal del Producto con Subida y Selector de Assets */}
+              <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                    <ImageIcon size={14} className="text-amber-400" />
+                    <span>Foto / Gráfico Principal del Producto</span>
+                  </label>
+                  <span className="text-[10px] text-neutral-400 font-mono">Visible en la tienda</span>
                 </div>
-                <div>
-                  <label className="text-neutral-300 block mb-1 font-bold">URL Imagen Principal</label>
-                  <input
-                    name="imageUrl"
-                    type="text"
-                    defaultValue={editingProduct?.images[0] || '/src/assets/images/franela_oversize_1791054727426.jpg'}
-                    className="w-full p-2.5 rounded bg-neutral-900 border border-neutral-800 text-white text-[11px]"
-                  />
+
+                {/* Hidden file input */}
+                <input
+                  type="file"
+                  ref={productFileInputRef}
+                  accept="image/*"
+                  onChange={handleProductImageUpload}
+                  className="hidden"
+                />
+
+                {/* Hidden input to ensure form submission has imageUrl */}
+                <input
+                  type="hidden"
+                  name="imageUrl"
+                  value={productImageInput}
+                />
+
+                <div className="flex flex-col sm:flex-row items-center gap-4">
+                  {/* Image Preview with transparency pattern */}
+                  <div
+                    className="relative w-28 h-28 rounded-xl overflow-hidden shrink-0 border border-neutral-700 shadow-inner flex items-center justify-center group"
+                    style={{
+                      backgroundImage: `
+                        linear-gradient(45deg, #222 25%, transparent 25%),
+                        linear-gradient(-45deg, #222 25%, transparent 25%),
+                        linear-gradient(45deg, transparent 75%, #222 75%),
+                        linear-gradient(-45deg, transparent 75%, #222 75%)
+                      `,
+                      backgroundSize: '12px 12px',
+                      backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0px',
+                      backgroundColor: '#161616',
+                    }}
+                  >
+                    {isUploadingProductImage ? (
+                      <div className="flex flex-col items-center justify-center text-center p-2">
+                        <RefreshCw size={20} className="animate-spin text-amber-400 mb-1" />
+                        <span className="text-[9px] text-amber-300 font-bold">Optimizando...</span>
+                      </div>
+                    ) : (
+                      <img
+                        src={productImageInput || '/assets/aistudio/exodo-appIcon_cbe32977.png'}
+                        alt="Vista previa de producto"
+                        className="w-full h-full object-contain p-1"
+                        onError={(e) => {
+                          (e.target as HTMLImageElement).src = '/assets/aistudio/exodo-appIcon_cbe32977.png';
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {/* Upload and Asset Buttons */}
+                  <div className="flex-1 w-full space-y-2">
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => productFileInputRef.current?.click()}
+                        disabled={isUploadingProductImage}
+                        className="flex-1 min-w-[130px] px-3 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <Upload size={14} />
+                        <span>Subir Foto</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setIsAssetPickerOpen(!isAssetPickerOpen)}
+                        className="flex-1 min-w-[130px] px-3 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-neutral-700 transition-colors cursor-pointer"
+                      >
+                        <Palette size={14} className="text-amber-400" />
+                        <span>Elegir de Assets ({artworkDesigns.length})</span>
+                      </button>
+                    </div>
+
+                    <p className="text-[10px] text-neutral-400">
+                      Sube cualquier foto desde tu teléfono o PC (se optimizará y comprimirá automáticamente) o selecciona un arte ya guardado en la librería de Assets.
+                    </p>
+                  </div>
                 </div>
+
+                {/* Inline Assets Selector Drawer */}
+                {isAssetPickerOpen && (
+                  <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2 animate-in fade-in">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-neutral-300">
+                        Selecciona un gráfico de la librería:
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setIsAssetPickerOpen(false)}
+                        className="text-[10px] text-neutral-500 hover:text-white"
+                      >
+                        Cerrar ✕
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-4 sm:grid-cols-6 gap-2 max-h-48 overflow-y-auto p-1">
+                      {artworkDesigns.map((art) => (
+                        <div
+                          key={art.id}
+                          onClick={() => {
+                            setProductImageInput(art.highResGraphic);
+                            setIsAssetPickerOpen(false);
+                          }}
+                          className={`relative aspect-square rounded-lg overflow-hidden border cursor-pointer hover:scale-105 transition-transform flex items-center justify-center p-1 ${
+                            productImageInput === art.highResGraphic
+                              ? 'border-amber-400 ring-2 ring-amber-400/50 bg-amber-500/10'
+                              : 'border-neutral-800 bg-neutral-900 hover:border-neutral-600'
+                          }`}
+                          title={art.title}
+                        >
+                          <img
+                            src={art.highResGraphic}
+                            alt={art.title}
+                            className="w-full h-full object-contain"
+                            onError={(e) => {
+                              (e.target as HTMLImageElement).src = '/assets/aistudio/exodo-appIcon_cbe32977.png';
+                            }}
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               <button

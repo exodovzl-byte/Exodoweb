@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { ArtworkDesign, ArtworkCollection } from '../../types';
+import { compressImageFile } from '../../utils/imageCompressor';
 
 export const CollectionAssetLibrary: React.FC = () => {
   const { 
@@ -33,7 +34,9 @@ export const CollectionAssetLibrary: React.FC = () => {
     addArtworkDesign, 
     updateArtworkDesign, 
     deleteArtworkDesign, 
-    toggleArtworkSupport 
+    toggleArtworkSupport,
+    products,
+    updateProduct
   } = useStore();
 
   // Filters & Search
@@ -46,6 +49,12 @@ export const CollectionAssetLibrary: React.FC = () => {
   const [editingDesign, setEditingDesign] = useState<ArtworkDesign | null>(null);
   const [inspectImage, setInspectImage] = useState<string | null>(null);
   const [toastMessage, setToastMessage] = useState<string | null>(null);
+  const [isCompressing, setIsCompressing] = useState<boolean>(false);
+
+  // Quick Catalog Assignment Modal state
+  const [assignProductModalOpen, setAssignProductModalOpen] = useState<boolean>(false);
+  const [selectedArtworkForAssign, setSelectedArtworkForAssign] = useState<ArtworkDesign | null>(null);
+  const [selectedTargetProductId, setSelectedTargetProductId] = useState<string>('');
 
   // Form state
   const [formTitle, setFormTitle] = useState('');
@@ -58,6 +67,8 @@ export const CollectionAssetLibrary: React.FC = () => {
   const [formDpi, setFormDpi] = useState<number>(300);
   const [formColorProfile, setFormColorProfile] = useState('CMYK FOGRA39');
   const [formNotes, setFormNotes] = useState('');
+  const [formAssociatedProductId, setFormAssociatedProductId] = useState<string>('');
+  const [formSyncWithProduct, setFormSyncWithProduct] = useState<boolean>(true);
   
   // Support availability flags
   const [formSupports, setFormSupports] = useState({
@@ -83,7 +94,7 @@ export const CollectionAssetLibrary: React.FC = () => {
     setEditingDesign(null);
     setFormTitle('');
     setFormCollection('La calle es un museo');
-    setFormGraphic('/src/assets/images/mockup_inocentes_1791055607165.jpg');
+    setFormGraphic('/assets/aistudio/exodo-appIcon_cbe32977.png');
     setFormScripture('');
     setFormSpiritualMeaning('');
     setFormTechnique('DTF Textil Digital (300 DPI)');
@@ -91,6 +102,8 @@ export const CollectionAssetLibrary: React.FC = () => {
     setFormDpi(300);
     setFormColorProfile('CMYK FOGRA39');
     setFormNotes('');
+    setFormAssociatedProductId('');
+    setFormSyncWithProduct(true);
     setFormSupports({
       franela: true,
       tote: true,
@@ -114,13 +127,15 @@ export const CollectionAssetLibrary: React.FC = () => {
     setFormDpi(design.dpi || 300);
     setFormColorProfile(design.colorProfile || 'CMYK FOGRA39');
     setFormNotes(design.notes || '');
+    setFormAssociatedProductId(design.associatedProductId || '');
+    setFormSyncWithProduct(true);
     setFormSupports({ ...design.availableSupports });
     setFormTags([...design.tags]);
     setTagInput('');
     setIsModalOpen(true);
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -129,25 +144,34 @@ export const CollectionAssetLibrary: React.FC = () => {
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = () => {
-      setFormGraphic(reader.result as string);
-      showToast(`¡Gráfico "${file.name}" cargado en alta resolución!`);
-    };
-    reader.readAsDataURL(file);
+    try {
+      setIsCompressing(true);
+      showToast('Optimizando imagen...');
+      const optimized = await compressImageFile(file, 1200, 0.88);
+      setFormGraphic(optimized);
+      showToast(`¡Gráfico "${file.name}" cargado y optimizado con éxito!`);
+    } catch (err) {
+      console.error('Error optimizando imagen:', err);
+      alert('Hubo un problema al procesar la imagen.');
+    } finally {
+      setIsCompressing(false);
+    }
   };
 
-  const handleQuickGraphicReplace = (id: string, file: File) => {
+  const handleQuickGraphicReplace = async (id: string, file: File) => {
     if (!file.type.startsWith('image/')) {
       alert('Archivo de imagen inválido.');
       return;
     }
-    const reader = new FileReader();
-    reader.onload = () => {
-      updateArtworkDesign(id, { highResGraphic: reader.result as string });
-      showToast('¡Gráfico en alta resolución actualizado!');
-    };
-    reader.readAsDataURL(file);
+    try {
+      showToast('Optimizando y actualizando gráfico...');
+      const optimized = await compressImageFile(file, 1200, 0.88);
+      updateArtworkDesign(id, { highResGraphic: optimized });
+      showToast('¡Gráfico actualizado y sincronizado!');
+    } catch (err) {
+      console.error('Error en reemplazo rápido:', err);
+      alert('Error al actualizar la imagen.');
+    }
   };
 
   const handleAddTag = () => {
@@ -212,15 +236,28 @@ export const CollectionAssetLibrary: React.FC = () => {
       dpi: Number(formDpi) || 300,
       colorProfile: formColorProfile.trim(),
       createdAt: editingDesign ? editingDesign.createdAt : new Date().toISOString().split('T')[0],
+      associatedProductId: formAssociatedProductId || undefined,
       notes: formNotes.trim(),
     };
 
     if (editingDesign) {
       updateArtworkDesign(editingDesign.id, designPayload);
-      showToast(`¡Arte "${designPayload.title}" actualizado con éxito!`);
+      showToast(`¡Arte "${designPayload.title}" guardado en la librería!`);
     } else {
       addArtworkDesign(designPayload);
       showToast(`¡Nuevo arte "${designPayload.title}" guardado en la librería!`);
+    }
+
+    // Direct synchronization to product if selected
+    if (formAssociatedProductId && formSyncWithProduct) {
+      const prod = products.find((p) => p.id === formAssociatedProductId);
+      if (prod) {
+        updateProduct({
+          ...prod,
+          images: [formGraphic, ...prod.images.filter((img) => img !== formGraphic)],
+        });
+        showToast(`¡Catálogo actualizado! Foto de "${prod.name}" cambiada con éxito.`);
+      }
     }
 
     setIsModalOpen(false);
@@ -405,15 +442,27 @@ export const CollectionAssetLibrary: React.FC = () => {
                 <div>
                   
                   {/* High-res Graphic Frame */}
-                  <div className="relative aspect-[4/3] w-full bg-black overflow-hidden border-b border-neutral-800">
+                  <div className="relative aspect-[4/3] w-full bg-[#181818] overflow-hidden border-b border-neutral-800 flex items-center justify-center p-3">
+                    {/* Subtle neutral grid pattern to make transparent PNGs / DTF artwork clearly visible */}
+                    <div 
+                      className="absolute inset-0 opacity-20 pointer-events-none"
+                      style={{
+                        backgroundImage: 'radial-gradient(#4b5563 1px, transparent 1px)',
+                        backgroundSize: '12px 12px'
+                      }}
+                    />
+
                     <img
                       src={art.highResGraphic}
                       alt={art.title}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = '/assets/aistudio/exodo-appIcon_cbe32977.png';
+                      }}
+                      className="max-h-full max-w-full object-contain relative z-10 group-hover:scale-105 transition-transform duration-300 drop-shadow-md"
                     />
 
-                    {/* Gradient Overlay for Contrast */}
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-transparent to-black/30 pointer-events-none" />
+                    {/* Ring highlight instead of destructive black gradient */}
+                    <div className="absolute inset-0 ring-1 ring-inset ring-white/5 pointer-events-none" />
 
                     {/* Badges */}
                     <div className="absolute top-3 left-3 flex flex-wrap gap-1.5 items-center">
@@ -621,6 +670,21 @@ export const CollectionAssetLibrary: React.FC = () => {
                     >
                       <Download size={14} />
                     </a>
+
+                    {/* Quick Assign to Catalog Product */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedArtworkForAssign(art);
+                        setSelectedTargetProductId(art.associatedProductId || (products[0]?.id || ''));
+                        setAssignProductModalOpen(true);
+                      }}
+                      className="px-2 py-1.5 rounded-lg bg-[#0D253A] hover:bg-[#12334f] text-amber-300 border border-amber-500/40 text-xs font-bold transition-colors flex items-center gap-1 cursor-pointer"
+                      title="Vincular o asignar esta imagen a un producto del catálogo"
+                    >
+                      <Shirt size={12} className="text-amber-400" />
+                      <span className="text-[10px]">Catálogo</span>
+                    </button>
                   </div>
 
                   <div className="flex items-center gap-1">
@@ -698,22 +762,32 @@ export const CollectionAssetLibrary: React.FC = () => {
                     </label>
                     
                     {/* Image Preview Box */}
-                    <div className="relative aspect-[4/3] w-full rounded-xl bg-black border border-neutral-800 overflow-hidden flex items-center justify-center p-2">
+                    <div className="relative aspect-[4/3] w-full rounded-xl bg-[#181818] border border-neutral-800 overflow-hidden flex items-center justify-center p-3">
+                      <div 
+                        className="absolute inset-0 opacity-20 pointer-events-none"
+                        style={{
+                          backgroundImage: 'radial-gradient(#4b5563 1px, transparent 1px)',
+                          backgroundSize: '12px 12px'
+                        }}
+                      />
                       {formGraphic ? (
                         <img
                           src={formGraphic}
                           alt="Preview"
-                          className="max-h-full max-w-full object-contain"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = '/assets/aistudio/exodo-appIcon_cbe32977.png';
+                          }}
+                          className="max-h-full max-w-full object-contain relative z-10 drop-shadow-md"
                         />
                       ) : (
-                        <div className="text-center text-neutral-600">
+                        <div className="text-center text-neutral-500 relative z-10">
                           <ImageIcon size={32} className="mx-auto mb-1 opacity-50" />
                           <span className="text-xs">Sin imagen asignada</span>
                         </div>
                       )}
 
                       {formGraphic && (
-                        <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-mono text-emerald-400 border border-neutral-700">
+                        <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-[10px] font-mono text-emerald-400 border border-neutral-700 z-20">
                           {formDpi} DPI
                         </span>
                       )}
@@ -730,11 +804,12 @@ export const CollectionAssetLibrary: React.FC = () => {
                       />
                       <button
                         type="button"
+                        disabled={isCompressing}
                         onClick={() => fileInputRef.current?.click()}
-                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider border border-neutral-700 cursor-pointer"
+                        className="flex-1 flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-white text-xs font-bold uppercase tracking-wider border border-neutral-700 cursor-pointer disabled:opacity-50"
                       >
                         <Upload size={14} className="text-amber-400" />
-                        <span>Subir Archivo Gráfico HD</span>
+                        <span>{isCompressing ? 'Optimizando Imagen...' : 'Subir Archivo Gráfico HD'}</span>
                       </button>
                     </div>
                   </div>
@@ -959,6 +1034,40 @@ export const CollectionAssetLibrary: React.FC = () => {
                     </div>
                   </div>
 
+                  {/* Vincular con Producto del Catálogo */}
+                  <div className="p-4 rounded-xl bg-[#0D253A]/40 border border-neutral-700/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                        <Shirt size={14} className="text-amber-400" />
+                        <span>Vincular con Producto del Catálogo:</span>
+                      </label>
+                      <span className="text-[10px] text-neutral-400 font-mono">Opcional</span>
+                    </div>
+                    <select
+                      value={formAssociatedProductId}
+                      onChange={(e) => setFormAssociatedProductId(e.target.value)}
+                      className="w-full p-2.5 bg-neutral-900 border border-neutral-700 rounded-xl text-xs text-white focus:border-amber-400 focus:outline-none"
+                    >
+                      <option value="">-- No vincular a ningún producto (Sólo guardar en Assets) --</option>
+                      {products.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {p.name} [{p.category.toUpperCase()}] — ${p.basePrice}
+                        </option>
+                      ))}
+                    </select>
+                    {formAssociatedProductId && (
+                      <label className="flex items-center gap-2 pt-1 text-xs text-emerald-400 font-bold cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={formSyncWithProduct}
+                          onChange={(e) => setFormSyncWithProduct(e.target.checked)}
+                          className="w-4 h-4 rounded bg-neutral-900 border-neutral-700 text-amber-500 focus:ring-0 cursor-pointer"
+                        />
+                        <span>Aplicar de inmediato este gráfico como foto principal del producto en la tienda</span>
+                      </label>
+                    )}
+                  </div>
+
                 </div>
 
               </div>
@@ -1006,6 +1115,123 @@ export const CollectionAssetLibrary: React.FC = () => {
               alt="High-res artwork inspection"
               className="max-h-[85vh] w-auto mx-auto object-contain rounded-xl"
             />
+          </div>
+        </div>
+      )}
+      {/* ======================================================== */}
+      {/* QUICK ASSIGN TO CATALOG PRODUCT MODAL                    */}
+      {/* ======================================================== */}
+      {assignProductModalOpen && selectedArtworkForAssign && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/85 backdrop-blur-md animate-in fade-in">
+          <div className="relative w-full max-w-md bg-neutral-900 border border-neutral-700/80 rounded-2xl p-6 shadow-2xl space-y-5 text-white">
+            <div className="flex items-center justify-between border-b border-neutral-800 pb-3">
+              <div className="flex items-center gap-2">
+                <Shirt className="text-amber-400" size={18} />
+                <h3 className="text-sm font-black uppercase tracking-wider text-white">
+                  Vincular Arte a Producto del Catálogo
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAssignProductModalOpen(false)}
+                className="text-neutral-400 hover:text-white p-1 rounded-lg hover:bg-neutral-800"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Artwork Preview Card */}
+            <div className="flex items-center gap-3.5 p-3 rounded-xl bg-neutral-950 border border-neutral-800">
+              <div
+                className="w-16 h-16 rounded-lg overflow-hidden shrink-0 border border-neutral-700 flex items-center justify-center"
+                style={{
+                  backgroundImage: `
+                    linear-gradient(45deg, #1f1f1f 25%, transparent 25%),
+                    linear-gradient(-45deg, #1f1f1f 25%, transparent 25%),
+                    linear-gradient(45deg, transparent 75%, #1f1f1f 75%),
+                    linear-gradient(-45deg, transparent 75%, #1f1f1f 75%)
+                  `,
+                  backgroundSize: '12px 12px',
+                  backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0px',
+                  backgroundColor: '#141414',
+                }}
+              >
+                <img
+                  src={selectedArtworkForAssign.highResGraphic}
+                  alt={selectedArtworkForAssign.title}
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    (e.target as HTMLImageElement).src = '/assets/aistudio/exodo-appIcon_cbe32977.png';
+                  }}
+                />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="text-xs font-bold text-white truncate">{selectedArtworkForAssign.title}</p>
+                <p className="text-[10px] text-amber-400 font-mono">{selectedArtworkForAssign.collection}</p>
+                <p className="text-[10px] text-neutral-400 truncate mt-0.5">{selectedArtworkForAssign.technique}</p>
+              </div>
+            </div>
+
+            {/* Target Product Selection */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-bold text-neutral-300">
+                Selecciona el producto a actualizar en la tienda:
+              </label>
+              <select
+                value={selectedTargetProductId}
+                onChange={(e) => setSelectedTargetProductId(e.target.value)}
+                className="w-full p-2.5 bg-neutral-950 border border-neutral-700 rounded-xl text-xs text-white focus:border-amber-400 focus:outline-none"
+              >
+                <option value="">-- Elige un producto --</option>
+                {products.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name} [{p.category.toUpperCase()}] — ${p.basePrice}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[10px] text-neutral-400">
+                Al confirmar, este arte se aplicará como la foto principal del producto en la tienda visible al cliente.
+              </p>
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-2 pt-2 border-t border-neutral-800">
+              <button
+                type="button"
+                onClick={() => setAssignProductModalOpen(false)}
+                className="px-4 py-2 rounded-xl bg-neutral-800 text-neutral-300 hover:text-white text-xs font-bold uppercase transition-colors"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (!selectedTargetProductId) {
+                    alert('Por favor selecciona un producto.');
+                    return;
+                  }
+                  const targetProd = products.find((p) => p.id === selectedTargetProductId);
+                  if (targetProd && selectedArtworkForAssign) {
+                    updateProduct({
+                      ...targetProd,
+                      images: [
+                        selectedArtworkForAssign.highResGraphic,
+                        ...targetProd.images.filter((img) => img !== selectedArtworkForAssign.highResGraphic),
+                      ],
+                    });
+                    updateArtworkDesign(selectedArtworkForAssign.id, {
+                      associatedProductId: selectedTargetProductId,
+                    });
+                    showToast(`¡Foto de "${targetProd.name}" actualizada con el arte!`);
+                    setAssignProductModalOpen(false);
+                  }
+                }}
+                disabled={!selectedTargetProductId}
+                className="px-5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-black text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
+              >
+                Actualizar Foto en Catálogo
+              </button>
+            </div>
           </div>
         </div>
       )}
