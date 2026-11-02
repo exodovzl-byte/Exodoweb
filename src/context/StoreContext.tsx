@@ -581,11 +581,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     const localTime = local?.lastUpdated ? Date.parse(local.lastUpdated) : 0;
     const incomingTime = incoming.lastUpdated ? Date.parse(incoming.lastUpdated) : 0;
 
-    // Este dispositivo ya tenía saldos guardados y son más nuevos que la nube:
-    // se conservan y se vuelven a publicar para reparar el documento atrasado.
-    if (hasLocalBackup && localTime > incomingTime) {
-      saveCashBalancesToFirestore(local).catch(() => {});
-      saveStoreDataToCloud({ treasuryAccounts: local }).catch(() => {});
+    // Este dispositivo ya tenía saldos guardados y son igual de nuevos o más
+    // nuevos que la nube: se conservan y se vuelven a publicar para reparar el
+    // documento atrasado (solo si de verdad hay algo que reparar, para no
+    // entrar en un bucle de escrituras con el eco de Firestore).
+    if (hasLocalBackup && localTime > 0 && localTime >= incomingTime) {
+      const differs =
+        (incoming.efectivoUSD ?? local.efectivoUSD) !== local.efectivoUSD ||
+        (incoming.efectivoVES ?? local.efectivoVES) !== local.efectivoVES ||
+        (incoming.binanceUSDT ?? local.binanceUSDT) !== local.binanceUSDT ||
+        (incoming.bancoDelTesoroVES ?? local.bancoDelTesoroVES) !== local.bancoDelTesoroVES;
+      if (incomingTime < localTime || differs) {
+        saveCashBalancesToFirestore(local).catch(() => {});
+        saveStoreDataToCloud({ treasuryAccounts: local }).catch(() => {});
+      }
       return;
     }
 
@@ -596,8 +605,18 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       bancoDelTesoroVES: incoming.bancoDelTesoroVES ?? local.bancoDelTesoroVES,
       lastUpdated: incoming.lastUpdated || local.lastUpdated,
     };
+    const changed =
+      next.efectivoUSD !== local.efectivoUSD ||
+      next.efectivoVES !== local.efectivoVES ||
+      next.binanceUSDT !== local.binanceUSDT ||
+      next.bancoDelTesoroVES !== local.bancoDelTesoroVES;
     treasuryAccountsRef.current = next;
     setTreasuryAccounts(next);
+    // Si la nube traía un saldo más nuevo, se replica al documento principal
+    // para que ambos documentos queden siempre alineados.
+    if (changed) {
+      saveStoreDataToCloud({ treasuryAccounts: next });
+    }
   }, []);
 
   // Real-time Firestore sync listener for multi-device admin support
