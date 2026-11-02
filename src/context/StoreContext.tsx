@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { 
   Product, 
   CartItem, 
@@ -563,18 +563,48 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [isFirestoreSynced, setIsFirestoreSynced] = useState<boolean>(false);
 
+  // Ref con el saldo vigente: permite comparar contra la nube sin depender del
+  // cierre (stale closure) de los listeners.
+  const treasuryAccountsRef = useRef<TreasuryAccounts>(treasuryAccounts);
+  useEffect(() => {
+    treasuryAccountsRef.current = treasuryAccounts;
+  }, [treasuryAccounts]);
+
+  // Aplica un saldo que llega de la nube SOLO si es más reciente que el local.
+  // Antes, un documento viejo de Firestore (con saldos en 0) sobreescribía el
+  // ajuste recién guardado al recargar o al pulsar "Nube OK".
+  const applyTreasuryFromCloud = useCallback((incoming?: Partial<TreasuryAccounts> | null) => {
+    if (!incoming) return;
+
+    const local = treasuryAccountsRef.current;
+    const hasLocalBackup = localStorage.getItem('exodo_treasury_accounts') !== null;
+    const localTime = local?.lastUpdated ? Date.parse(local.lastUpdated) : 0;
+    const incomingTime = incoming.lastUpdated ? Date.parse(incoming.lastUpdated) : 0;
+
+    // Este dispositivo ya tenía saldos guardados y son más nuevos que la nube:
+    // se conservan y se vuelven a publicar para reparar el documento atrasado.
+    if (hasLocalBackup && localTime > incomingTime) {
+      saveCashBalancesToFirestore(local).catch(() => {});
+      saveStoreDataToCloud({ treasuryAccounts: local }).catch(() => {});
+      return;
+    }
+
+    const next: TreasuryAccounts = {
+      efectivoUSD: incoming.efectivoUSD ?? local.efectivoUSD,
+      efectivoVES: incoming.efectivoVES ?? local.efectivoVES,
+      binanceUSDT: incoming.binanceUSDT ?? local.binanceUSDT,
+      bancoDelTesoroVES: incoming.bancoDelTesoroVES ?? local.bancoDelTesoroVES,
+      lastUpdated: incoming.lastUpdated || local.lastUpdated,
+    };
+    treasuryAccountsRef.current = next;
+    setTreasuryAccounts(next);
+  }, []);
+
   // Real-time Firestore sync listener for multi-device admin support
   useEffect(() => {
     const unsubscribe = subscribeToFirestoreCashBalances(
       (firestoreData) => {
-        setTreasuryAccounts((prev) => ({
-          ...prev,
-          efectivoUSD: firestoreData.efectivoUSD ?? prev.efectivoUSD,
-          efectivoVES: firestoreData.efectivoVES ?? prev.efectivoVES,
-          binanceUSDT: firestoreData.binanceUSDT ?? prev.binanceUSDT,
-          bancoDelTesoroVES: firestoreData.bancoDelTesoroVES ?? prev.bancoDelTesoroVES,
-          lastUpdated: firestoreData.lastUpdated,
-        }));
+        applyTreasuryFromCloud(firestoreData);
         setIsFirestoreSynced(true);
       },
       () => {
@@ -582,7 +612,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     );
     return () => unsubscribe();
-  }, []);
+  }, [applyTreasuryFromCloud]);
 
   // Cash Transactions (Ingresos, Egresos, Retiros)
   const [transactions, setTransactions] = useState<CashTransaction[]>(() => {
@@ -644,6 +674,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return localStorage.getItem('exodo_cloud_sync_timestamp');
   });
 
+  // El sello de sincronización solo avanza: nunca debe retroceder a una fecha
+  // vieja de la nube y hacer que el próximo evento pise cambios locales.
+  const rememberCloudTimestamp = useCallback((timestamp?: string | null) => {
+    if (!timestamp) return;
+    const current = localStorage.getItem('exodo_cloud_sync_timestamp');
+    const incomingTime = new Date(timestamp).getTime();
+    const currentTime = current ? new Date(current).getTime() : 0;
+    if (!current || incomingTime >= currentTime) {
+      setLastCloudSyncTimestamp(timestamp);
+      localStorage.setItem('exodo_cloud_sync_timestamp', timestamp);
+    }
+  }, []);
+
   // Cross-Device Real-Time Cloud Synchronization
   useEffect(() => {
     let isMounted = true;
@@ -701,7 +744,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setExchangeRateBCV(cloudData.exchangeRateBCV);
         }
         if (cloudData.treasuryAccounts) {
-          setTreasuryAccounts(cloudData.treasuryAccounts);
+          applyTreasuryFromCloud(cloudData.treasuryAccounts);
         }
         if (Array.isArray(cloudData.transactions)) {
           setTransactions(cloudData.transactions);
@@ -713,8 +756,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setCashCloses(cloudData.cashCloses);
         }
         if (cloudData.updatedAt) {
-          setLastCloudSyncTimestamp(cloudData.updatedAt);
-          localStorage.setItem('exodo_cloud_sync_timestamp', cloudData.updatedAt);
+          rememberCloudTimestamp(cloudData.updatedAt);
         }
         setIsCloudSyncing(false);
       })
@@ -745,13 +787,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (Array.isArray(incoming.orders)) setOrders(incoming.orders);
       if (Array.isArray(incoming.partnerWithdrawals)) setPartnerWithdrawals(incoming.partnerWithdrawals);
       if (typeof incoming.exchangeRateBCV === 'number' && incoming.exchangeRateBCV > 0) setExchangeRateBCV(incoming.exchangeRateBCV);
-      if (incoming.treasuryAccounts) setTreasuryAccounts(incoming.treasuryAccounts);
+      if (incoming.treasuryAccounts) applyTreasuryFromCloud(incoming.treasuryAccounts);
       if (Array.isArray(incoming.transactions)) setTransactions(incoming.transactions);
       if (Array.isArray(incoming.debts)) setDebts(incoming.debts);
       if (Array.isArray(incoming.cashCloses)) setCashCloses(incoming.cashCloses);
       if (incoming.updatedAt) {
-        setLastCloudSyncTimestamp(incoming.updatedAt);
-        localStorage.setItem('exodo_cloud_sync_timestamp', incoming.updatedAt);
+        rememberCloudTimestamp(incoming.updatedAt);
       }
     });
 
@@ -771,10 +812,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (Array.isArray(cloudData.partnerWithdrawals)) setPartnerWithdrawals(cloudData.partnerWithdrawals);
         if (Array.isArray(cloudData.orders)) setOrders(cloudData.orders);
         if (typeof cloudData.exchangeRateBCV === 'number' && cloudData.exchangeRateBCV > 0) setExchangeRateBCV(cloudData.exchangeRateBCV);
-        if (cloudData.treasuryAccounts) setTreasuryAccounts(cloudData.treasuryAccounts);
+        if (cloudData.treasuryAccounts) applyTreasuryFromCloud(cloudData.treasuryAccounts);
         if (cloudData.updatedAt) {
-          setLastCloudSyncTimestamp(cloudData.updatedAt);
-          localStorage.setItem('exodo_cloud_sync_timestamp', cloudData.updatedAt);
+          rememberCloudTimestamp(cloudData.updatedAt);
         }
       }).catch(() => {});
     };
@@ -1330,15 +1370,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       account === 'banco_del_tesoro_ves' ? 'bancoDelTesoroVES' :
       account === 'efectivo_usd' ? 'efectivoUSD' : 'efectivoVES';
 
-    const currentVal = Number(treasuryAccounts[fieldKey] || 0);
+    const currentAccounts = treasuryAccountsRef.current;
+    const currentVal = Number(currentAccounts[fieldKey] || 0);
     const diff = newBalance - currentVal;
 
     const updatedAccounts: TreasuryAccounts = {
-      ...treasuryAccounts,
+      ...currentAccounts,
       [fieldKey]: Math.max(0, newBalance),
       lastUpdated: new Date().toISOString(),
     };
     setTreasuryAccounts(updatedAccounts);
+    treasuryAccountsRef.current = updatedAccounts;
     saveCashBalancesToFirestore(updatedAccounts);
 
     if (Math.abs(diff) > 0.001) {
@@ -1361,8 +1403,20 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         registeredBy: 'Administrador',
       };
 
-      setTransactions((prev) => [adjTx, ...prev]);
+      setTransactions((prev) => {
+        const nextTransactions = [adjTx, ...prev];
+        // Guardar el saldo y el movimiento juntos en el documento principal:
+        // antes solo se escribía la colección de tesorería y al recargar la
+        // nube devolvía el saldo viejo (0).
+        saveStoreDataToCloud({
+          treasuryAccounts: updatedAccounts,
+          transactions: nextTransactions,
+        });
+        return nextTransactions;
+      });
       saveCashTransactionToFirestore(adjTx);
+    } else {
+      saveStoreDataToCloud({ treasuryAccounts: updatedAccounts });
     }
   };
 
@@ -1392,7 +1446,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       exchangeRateUsed: params.exchangeRateUsed,
     };
 
-    setTransactions((prev) => [tx, ...prev]);
+    setTransactions((prev) => {
+      const nextTransactions = [tx, ...prev];
+      saveStoreDataToCloud({ transactions: nextTransactions });
+      return nextTransactions;
+    });
     saveCashTransactionToFirestore(tx);
 
     setTreasuryAccounts((prev) => {
@@ -1433,7 +1491,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
 
       next.lastUpdated = new Date().toISOString();
+      treasuryAccountsRef.current = next;
       saveCashBalancesToFirestore(next);
+      saveStoreDataToCloud({ treasuryAccounts: next });
       return next;
     });
   };
@@ -1446,7 +1506,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       id: `tx-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
       date: new Date().toISOString(),
     };
-    setTransactions((prev) => [newTx, ...prev]);
+    setTransactions((prev) => {
+      const nextTransactions = [newTx, ...prev];
+      saveStoreDataToCloud({ transactions: nextTransactions });
+      return nextTransactions;
+    });
     saveCashTransactionToFirestore(newTx);
 
     // Update account balance
@@ -1464,13 +1528,19 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         [fieldKey]: Math.max(0, updated),
         lastUpdated: new Date().toISOString(),
       };
+      treasuryAccountsRef.current = nextAccounts;
       saveCashBalancesToFirestore(nextAccounts);
+      saveStoreDataToCloud({ treasuryAccounts: nextAccounts });
       return nextAccounts;
     });
   };
 
   const deleteTransaction = (id: string) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+    setTransactions((prev) => {
+      const nextTransactions = prev.filter((t) => t.id !== id);
+      saveStoreDataToCloud({ transactions: nextTransactions });
+      return nextTransactions;
+    });
   };
 
   // Debts Operations ("Quién me debe")
@@ -1485,15 +1555,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       status: 'pendiente',
       createdAt: new Date().toISOString().split('T')[0],
     };
-    setDebts((prev) => [newDebt, ...prev]);
+    setDebts((prev) => {
+      const nextDebts = [newDebt, ...prev];
+      saveStoreDataToCloud({ debts: nextDebts });
+      return nextDebts;
+    });
   };
 
   const updateDebt = (id: string, updates: Partial<DebtRecord>) => {
-    setDebts((prev) => prev.map((d) => (d.id === id ? { ...d, ...updates } : d)));
+    setDebts((prev) => {
+      const nextDebts = prev.map((d) => (d.id === id ? { ...d, ...updates } : d));
+      saveStoreDataToCloud({ debts: nextDebts });
+      return nextDebts;
+    });
   };
 
   const deleteDebt = (id: string) => {
-    setDebts((prev) => prev.filter((d) => d.id !== id));
+    setDebts((prev) => {
+      const nextDebts = prev.filter((d) => d.id !== id);
+      saveStoreDataToCloud({ debts: nextDebts });
+      return nextDebts;
+    });
   };
 
   const recordDebtPayment = (
@@ -1502,14 +1584,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     amountVES: number,
     targetAccount: 'binance_usdt' | 'banco_del_tesoro_ves' | 'efectivo_usd' | 'efectivo_ves'
   ) => {
-    setDebts((prev) =>
-      prev.map((d) => {
+    setDebts((prev) => {
+      const nextDebts = prev.map((d) => {
         if (d.id !== id) return d;
         const newPaidUSD = d.paidUSD + amountUSD;
         const newPaidVES = d.paidVES + amountVES;
         const newRemainingUSD = Math.max(0, d.totalUSD - newPaidUSD);
         const newRemainingVES = Math.max(0, d.totalVES - newPaidVES);
-        const newStatus = newRemainingUSD <= 0.05 ? 'cobrado' : 'abonado';
+        const newStatus: DebtRecord['status'] = newRemainingUSD <= 0.05 ? 'cobrado' : 'abonado';
         return {
           ...d,
           paidUSD: newPaidUSD,
@@ -1518,8 +1600,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           remainingVES: newRemainingVES,
           status: newStatus,
         };
-      })
-    );
+      });
+      saveStoreDataToCloud({ debts: nextDebts });
+      return nextDebts;
+    });
 
     // Auto-create income transaction
     const targetAmount = targetAccount === 'binance_usdt' ? amountUSD : amountVES;
@@ -1573,7 +1657,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       closedBy,
     };
 
-    setCashCloses((prev) => [newClose, ...prev]);
+    setCashCloses((prev) => {
+      const nextCloses = [newClose, ...prev];
+      saveStoreDataToCloud({ cashCloses: nextCloses });
+      return nextCloses;
+    });
     addAdminNotification({
       title: `📊 Cierre de Caja Realizado: ${date}`,
       message: `Total Facturado: $${totalUSD.toFixed(2)} (${dayOrders.length} pedidos, ${deliveredOrders.length} entregados).`,
@@ -2209,6 +2297,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       lastUpdated: new Date().toISOString(),
     };
     setTreasuryAccounts(zeroAccounts);
+    treasuryAccountsRef.current = zeroAccounts;
 
     // 2. Persist empty clean arrays in localStorage
     localStorage.setItem('exodo_orders', JSON.stringify([]));
@@ -2263,10 +2352,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         heroSlides,
         collections,
         orders,
+        aboutContent,
+        socialLinks,
+        partnerWithdrawals,
+        exchangeRateBCV,
+        treasuryAccounts,
+        transactions,
+        debts,
+        cashCloses,
       });
+      // La tesorería también se respalda en su documento propio, que es el que
+      // alimenta los saldos en tiempo real de todos los dispositivos.
+      await saveCashBalancesToFirestore(treasuryAccounts);
       const latest = await fetchStoreDataFromCloud();
       if (latest?.updatedAt) {
-        setLastCloudSyncTimestamp(latest.updatedAt);
+        rememberCloudTimestamp(latest.updatedAt);
       }
     } catch (e) {
       console.warn('Sync manual error:', e);
