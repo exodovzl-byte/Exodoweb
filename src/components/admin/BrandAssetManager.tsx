@@ -18,6 +18,7 @@ import {
 import { useStore } from '../../context/StoreContext';
 import { BrandLogoAssets } from '../../types';
 import { ExodoEmblemLogo, ExodoWordmarkLogo, ExodoSwordLogo, ExodoBadgeLogo } from '../common/ExodoLogos';
+import { compressImageFile } from '../../utils/imageCompressor';
 
 interface AssetSlotDef {
   key: keyof BrandLogoAssets;
@@ -118,54 +119,6 @@ export const BrandAssetManager: React.FC = () => {
     }
   }, [currentAssets.appIcon]);
 
-  // Helper to optimize uploaded brand assets (max 800px, PNG with alpha, under 60KB for instant Firestore sync)
-  const optimizeImageFile = (file: File, maxDimension: number = 800): Promise<string> => {
-    return new Promise((resolve, reject) => {
-      // If SVG and under 150KB, read directly as dataUrl to preserve vectors
-      if (file.type === 'image/svg+xml' && file.size < 150 * 1024) {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-        return;
-      }
-
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        const img = new Image();
-        img.onload = () => {
-          let width = img.width;
-          let height = img.height;
-          if (width > maxDimension || height > maxDimension) {
-            if (width > height) {
-              height = Math.round((height * maxDimension) / width);
-              width = maxDimension;
-            } else {
-              width = Math.round((width * maxDimension) / height);
-              height = maxDimension;
-            }
-          }
-          const canvas = document.createElement('canvas');
-          canvas.width = width;
-          canvas.height = height;
-          const ctx = canvas.getContext('2d');
-          if (!ctx) {
-            resolve(e.target?.result as string);
-            return;
-          }
-          ctx.clearRect(0, 0, width, height);
-          ctx.drawImage(img, 0, 0, width, height);
-          const optimized = canvas.toDataURL('image/png', 0.92);
-          resolve(optimized);
-        };
-        img.onerror = () => resolve(e.target?.result as string);
-        img.src = e.target?.result as string;
-      };
-      reader.onerror = reject;
-      reader.readAsDataURL(file);
-    });
-  };
-
   // Handle file reading to optimized base64 DataURL
   const handleFileUpload = async (key: keyof BrandLogoAssets, file: File) => {
     if (!file.type.startsWith('image/')) {
@@ -173,14 +126,9 @@ export const BrandAssetManager: React.FC = () => {
       return;
     }
 
-    if (file.size > 8 * 1024 * 1024) {
-      alert('La imagen no debe superar los 8MB.');
-      return;
-    }
-
     try {
       const maxDim = (key === 'appIcon' || key === 'appIconSquare') ? 512 : 800;
-      const dataUrl = await optimizeImageFile(file, maxDim);
+      const dataUrl = await compressImageFile(file, maxDim, 0.90);
 
       const updatedAssets: BrandLogoAssets = {
         ...currentAssets,

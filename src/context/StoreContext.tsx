@@ -2214,9 +2214,13 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     localStorage.setItem('exodo_orders', JSON.stringify([]));
     localStorage.setItem('exodo_partner_withdrawals', JSON.stringify([]));
     localStorage.setItem('exodo_cash_transactions', JSON.stringify([]));
+    localStorage.setItem('exodo_transactions', JSON.stringify([]));
     localStorage.setItem('exodo_debts', JSON.stringify([]));
     localStorage.setItem('exodo_cash_closes', JSON.stringify([]));
     localStorage.setItem('exodo_treasury_accounts', JSON.stringify(zeroAccounts));
+    localStorage.setItem('exodo_cash_balances', JSON.stringify(zeroAccounts));
+    localStorage.removeItem('exodo_cart');
+    setCart([]);
 
     // 3. Clear cloud Firestore collections and backend files
     saveStoreDataToCloud({

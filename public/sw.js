@@ -1,10 +1,11 @@
 // Service Worker for ÉXODO PWA (sw.js)
-const CACHE_NAME = 'exodo-pwa-v3';
+const CACHE_NAME = 'exodo-pwa-v4';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
   '/manifest.json',
   '/icon.svg',
+  '/assets/aistudio/exodo-appIcon_cbe32977.png',
   '/pwa-192x192.png',
   '/pwa-512x512.png',
   '/pwa-maskable-512x512.png',

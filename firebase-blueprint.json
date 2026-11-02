@@ -1,0 +1,75 @@
+{
+  "entities": {
+    "StoreData": {
+      "title": "StoreData",
+      "description": "Consolidated store configuration, catalog, and administrative state",
+      "type": "object",
+      "properties": {
+        "brandConfig": { "type": "object", "description": "Brand colors, logos, and typography" },
+        "products": { "type": "array", "description": "Catalog products list" },
+        "labPricingConfig": { "type": "object", "description": "Custom lab pricing parameters" },
+        "customLabMockups": { "type": "array", "description": "Mockup apparel and goods templates" },
+        "artworkDesigns": { "type": "array", "description": "Asset library artwork designs" },
+        "heroSlides": { "type": "array", "description": "Hero banner slides" },
+        "collections": { "type": "array", "description": "Product collections" },
+        "orders": { "type": "array", "description": "OMS registered customer orders" },
+        "partnerWithdrawals": { "type": "array", "description": "Partner salary withdrawal logs" },
+        "exchangeRateBCV": { "type": "number", "description": "Official BCV exchange rate in VES per USD" },
+        "treasuryAccounts": { "type": "object", "description": "Cash register and bank accounts balances" },
+        "transactions": { "type": "array", "description": "Treasury ledger transactions" },
+        "debts": { "type": "array", "description": "Accounts receivable records" },
+        "cashCloses": { "type": "array", "description": "Daily cash close records" },
+        "aboutContent": { "type": "object", "description": "Brand narrative and ministry story" },
+        "socialLinks": { "type": "object", "description": "Social media links" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Timestamp of last modification" },
+        "updatedBy": { "type": "string", "description": "Admin or process that last modified state" }
+      }
+    },
+    "CashRegister": {
+      "title": "CashRegister",
+      "description": "Real-time physical cash and account balances",
+      "type": "object",
+      "properties": {
+        "efectivoUSD": { "type": "number", "description": "Physical USD cash in workshop" },
+        "efectivoVES": { "type": "number", "description": "Physical VES cash bills" },
+        "binanceUSDT": { "type": "number", "description": "Binance Pay USDT digital balance" },
+        "bancoDelTesoroVES": { "type": "number", "description": "Banco del Tesoro digital Pago Movil balance" },
+        "lastUpdated": { "type": "string", "format": "date-time", "description": "Last update timestamp" },
+        "updatedBy": { "type": "string", "description": "Last updated by" }
+      }
+    },
+    "CashTransaction": {
+      "title": "CashTransaction",
+      "description": "Individual ledger cash income or expense transaction",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Transaction identifier" },
+        "account": { "type": "string", "description": "Target account" },
+        "type": { "type": "string", "enum": ["ingreso", "egreso"], "description": "Transaction direction" },
+        "amount": { "type": "number", "description": "Amount in native account currency" },
+        "amountUSD": { "type": "number", "description": "Amount in USD equivalent" },
+        "concept": { "type": "string", "description": "Concept description" },
+        "category": { "type": "string", "description": "Expense or income category" },
+        "date": { "type": "string", "description": "Operation date" },
+        "refNumber": { "type": "string", "description": "Reference number or receipt ID" },
+        "createdBy": { "type": "string", "description": "Operator identifier" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["id", "account", "type", "amount", "concept"]
+    }
+  },
+  "firestore": {
+    "/store_data/{docId}": {
+      "schema": "StoreData",
+      "description": "Primary store configuration and catalog snapshot"
+    },
+    "/treasury/{balanceId}": {
+      "schema": "CashRegister",
+      "description": "Physical and digital cash balances"
+    },
+    "/cash_transactions/{transactionId}": {
+      "schema": "CashTransaction",
+      "description": "Audit trail of cash and bank ledger movements"
+    }
+  }
+}

@@ -94,6 +94,9 @@ export const FeaturedProducts: React.FC = () => {
                     src={product.images[0]}
                     alt={product.name}
                     referrerPolicy="no-referrer"
+                    onError={(e) => {
+                      (e.currentTarget as HTMLImageElement).src = '/assets/aistudio/exodo-appIcon_cbe32977.png';
+                    }}
                     className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                   />
                   

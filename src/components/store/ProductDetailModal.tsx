@@ -175,6 +175,9 @@ export const ProductDetailModal: React.FC = () => {
                   src={product.images[activeImageIndex] || product.images[0]}
                   alt={product.name}
                   referrerPolicy="no-referrer"
+                  onError={(e) => {
+                    (e.currentTarget as HTMLImageElement).src = '/assets/aistudio/exodo-appIcon_cbe32977.png';
+                  }}
                   className="w-full h-full object-cover"
                 />
 

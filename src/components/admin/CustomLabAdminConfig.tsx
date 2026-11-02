@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { CustomLabMockup, ProductCategory, PrintAreaSizeConfig } from '../../types';
+import { compressImageFile } from '../../utils/imageCompressor';
 
 interface CustomCostItem {
   id: string;
@@ -247,7 +248,7 @@ ${costItems.map((i) => `• ${i.name}: $${(i.unitCost * i.quantity).toFixed(2)} 
     setTimeout(() => setSuccessToast(null), 3500);
   };
 
-  const handleImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
@@ -256,17 +257,20 @@ ${costItems.map((i) => `• ${i.name}: $${(i.unitCost * i.quantity).toFixed(2)} 
       return;
     }
 
-    if (file.size > 8 * 1024 * 1024) {
-      alert('La imagen no debe superar los 8MB.');
-      return;
+    try {
+      showNotification(`Optimizando imagen "${file.name}"...`);
+      const optimized = await compressImageFile(file, 1200, 0.88);
+      setMockupImageData(optimized);
+      showNotification(`Mockup "${file.name}" optimizado y listo para guardar.`);
+    } catch (err) {
+      console.error('Error optimizando mockup:', err);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setMockupImageData(reader.result as string);
+        showNotification(`Mockup "${file.name}" cargado listo para guardar.`);
+      };
+      reader.readAsDataURL(file);
     }
-
-    const reader = new FileReader();
-    reader.onload = () => {
-      setMockupImageData(reader.result as string);
-      showNotification(`Mockup "${file.name}" cargado listo para guardar.`);
-    };
-    reader.readAsDataURL(file);
   };
 
   const handleSaveMockup = (e: React.FormEvent) => {

@@ -4,6 +4,7 @@ import {
   doc, 
   setDoc, 
   getDoc, 
+  getDocFromServer,
   onSnapshot, 
   collection, 
   query, 
@@ -18,6 +19,18 @@ import { TreasuryAccounts, CashTransaction } from '../types';
 const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
 const firestoreDbId = (firebaseConfig as any).firestoreDatabaseId;
 export const db = firestoreDbId ? getFirestore(app, firestoreDbId) : getFirestore(app);
+
+// Connection verification per Firebase skill
+async function testFirestoreConnection() {
+  try {
+    await getDocFromServer(doc(db, 'test', 'connection'));
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('the client is offline')) {
+      console.warn('[Firestore] Please check your Firebase configuration.');
+    }
+  }
+}
+testFirestoreConnection();
 
 const CASH_BALANCES_DOC = 'treasury_cash_balances';
 const CASH_TRANSACTIONS_COLLECTION = 'cash_transactions';
@@ -73,8 +86,10 @@ export async function saveCashTransactionToFirestore(
 ): Promise<boolean> {
   // Always update local cache
   try {
-    const cached = JSON.parse(localStorage.getItem('exodo_transactions') || '[]');
-    localStorage.setItem('exodo_transactions', JSON.stringify([transaction, ...cached]));
+    const cached = JSON.parse(localStorage.getItem('exodo_cash_transactions') || localStorage.getItem('exodo_transactions') || '[]');
+    const updated = [transaction, ...cached];
+    localStorage.setItem('exodo_cash_transactions', JSON.stringify(updated));
+    localStorage.setItem('exodo_transactions', JSON.stringify(updated));
   } catch (e) {}
 
   try {

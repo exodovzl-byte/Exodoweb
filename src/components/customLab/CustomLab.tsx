@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { ProductColor, PrintAreaSizeConfig } from '../../types';
+import { compressImageFile } from '../../utils/imageCompressor';
 
 interface BiblicalVerse {
   book: string;
@@ -276,18 +277,27 @@ export const CustomLab: React.FC = () => {
     setIsDragging(false);
   };
 
-  // File Upload
-  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // File Upload with automatic compression (prevents LocalStorage/Cart crashes)
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      setPlacedArtworkUrl(reader.result as string);
+    try {
+      const optimized = await compressImageFile(file, 1000, 0.88);
+      setPlacedArtworkUrl(optimized);
       setArtworkPos({ x: 0, y: 0 });
       setArtworkScale(1);
       setArtworkRotate(0);
-    };
-    reader.readAsDataURL(file);
+    } catch (err) {
+      console.error('Error procesando imagen para Custom Lab:', err);
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPlacedArtworkUrl(reader.result as string);
+        setArtworkPos({ x: 0, y: 0 });
+        setArtworkScale(1);
+        setArtworkRotate(0);
+      };
+      reader.readAsDataURL(file);
+    }
   };
 
   // Add Custom Creation to Cart (Generates unique cartId for MULTIPLE customized products)

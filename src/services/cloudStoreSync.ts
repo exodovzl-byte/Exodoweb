@@ -95,6 +95,7 @@ export async function saveStoreDataToCloud(
       localStorage.setItem('exodo_treasury_accounts', JSON.stringify(partialData.treasuryAccounts));
     }
     if (partialData.transactions !== undefined) {
+      localStorage.setItem('exodo_cash_transactions', JSON.stringify(partialData.transactions));
       localStorage.setItem('exodo_transactions', JSON.stringify(partialData.transactions));
     }
     if (partialData.debts !== undefined) {

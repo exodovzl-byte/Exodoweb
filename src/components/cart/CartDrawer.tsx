@@ -68,6 +68,9 @@ export const CartDrawer: React.FC<{ onOpenCheckout: () => void }> = ({ onOpenChe
                       src={item.customDesign?.mockupUrl || item.product.images[0]}
                       alt={item.product.name}
                       referrerPolicy="no-referrer"
+                      onError={(e) => {
+                        (e.currentTarget as HTMLImageElement).src = '/assets/aistudio/exodo-appIcon_cbe32977.png';
+                      }}
                       className="w-full h-full object-cover"
                     />
                   </div>
