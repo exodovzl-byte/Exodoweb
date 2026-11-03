@@ -51,6 +51,7 @@ import { OrderDetailModal } from './OrderDetailModal';
 import { ManualOrderModal } from './ManualOrderModal';
 import { CustomLabAdminConfig } from './CustomLabAdminConfig';
 import { DevotionalsAndPrayersManager } from './DevotionalsAndPrayersManager';
+import { HeroBannerManager } from './HeroBannerManager';
 import { compressImageFile } from '../../utils/imageCompressor';
 
 export const AdminDashboard: React.FC = () => {
@@ -492,7 +493,7 @@ export const AdminDashboard: React.FC = () => {
               }`}
             >
               <Palette size={13} />
-              <span>Marca</span>
+              <span>Portada & Marca</span>
             </button>
             <button
               onClick={() => setActiveTab('custom_lab')}
@@ -669,7 +670,7 @@ export const AdminDashboard: React.FC = () => {
               <option value="treasury">💰 Tesorería & Flujo de Caja</option>
               <option value="products">👕 Catálogo de Productos ({products.length})</option>
               <option value="artworks">🎨 Asset Library ({artworkDesigns.length})</option>
-              <option value="brand">🏷️ Marca & Logos</option>
+              <option value="brand">🖼️ Portada del Inicio & Marca</option>
               <option value="custom_lab">⚙️ Custom Lab & Precios</option>
               <option value="sheets">📊 Google Sheets</option>
               <option value="devotionals_prayers">📖 La Palabra & Oración ({prayerRequests.filter(p => p.status === 'nueva').length} nuevas)</option>
@@ -684,7 +685,7 @@ export const AdminDashboard: React.FC = () => {
               { id: 'treasury', label: 'Tesorería', icon: Wallet },
               { id: 'products', label: 'Productos', count: products.length, icon: Package },
               { id: 'artworks', label: 'Assets', count: artworkDesigns.length, icon: ImageIcon },
-              { id: 'brand', label: 'Marca', icon: Palette },
+              { id: 'brand', label: 'Portada & Marca', icon: Palette },
               { id: 'custom_lab', label: 'Custom Lab', icon: Sliders },
               { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet },
               { id: 'devotionals_prayers', label: 'La Palabra', count: prayerRequests.filter(p => p.status === 'nueva').length || undefined, icon: BookOpen },
@@ -1248,11 +1249,14 @@ export const AdminDashboard: React.FC = () => {
         )}
 
         {/* ======================================================== */}
-        {/* TAB: MARCA, LOGOS OFICIALES, FUENTES & CÍRCULOS          */}
+        {/* TAB: PORTADA DEL INICIO, MARCA, LOGOS & CÍRCULOS        */}
         {/* ======================================================== */}
         {activeTab === 'brand' && (
           <div className="space-y-8">
             
+            {/* Gestor de Portada Principal del Inicio (Hero Banner: "LA PALABRA DE DIOS EN EL ASFALTO Y LA CALLE") */}
+            <HeroBannerManager />
+
             <div>
               <span className="text-[10px] uppercase font-bold tracking-widest text-amber-400 font-mono">
                 Brand Identity & Typography Hub

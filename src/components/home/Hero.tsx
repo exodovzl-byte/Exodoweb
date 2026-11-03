@@ -2,18 +2,34 @@ import React from 'react';
 import { ArrowRight, Sparkles, Flame } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 
+import { INITIAL_HERO_SLIDES } from '../../data/initialData';
+
 export const Hero: React.FC = () => {
-  const { setCurrentPage, setSelectedCategory } = useStore();
+  const { setCurrentPage, setSelectedCategory, heroSlides } = useStore();
+
+  const activeSlide = heroSlides?.find((s) => s.id === 'slide-1' || s.active) || heroSlides?.[0] || INITIAL_HERO_SLIDES[0];
+
+  const heroImage = activeSlide.image || '/src/assets/images/hero_streetwear_1791054715974.jpg';
+  const heroTitle = activeSlide.title || 'LA PALABRA DE DIOS EN EL ASFALTO Y LA CALLE';
+  const heroTagline = activeSlide.tagline || 'Street Resilience • Moda Cristiana con Propósito';
+  const heroSubtitle = activeSlide.subtitle || '"Moda y artículos personalizados con propósito: Diseños urbanos que llevan la Palabra de Dios a todos lados, creados por nosotros o diseñados por ti."';
+  const button1Text = activeSlide.buttonText || 'Explorar Colección';
+  const button1Link = activeSlide.buttonLink || 'tienda';
+  const button2Text = activeSlide.secondaryButtonText || 'Personaliza Tu Fe (Custom Lab)';
+  const button2Link = activeSlide.secondaryButtonLink || 'personalizador';
 
   return (
     <section className="relative w-full overflow-hidden bg-black text-white">
       {/* Background Streetwear Visual with Gritty Overlay */}
       <div className="absolute inset-0 z-0">
         <img
-          src="/src/assets/images/hero_streetwear_1791054715974.jpg"
+          src={heroImage}
           alt="ÉXODO Caracas Urban Christian Streetwear"
           referrerPolicy="no-referrer"
-          className="w-full h-full object-cover object-center filter brightness-[0.45] contrast-125"
+          className="w-full h-full object-cover object-center filter brightness-[0.45] contrast-125 transition-all duration-700"
+          onError={(e) => {
+            (e.currentTarget as HTMLImageElement).src = '/src/assets/images/hero_streetwear_1791054715974.jpg';
+          }}
         />
         <div className="absolute inset-0 bg-gradient-to-t from-black via-black/40 to-[#0D253A]/50"></div>
         {/* Street Texture Grain Overlay */}
@@ -23,44 +39,92 @@ export const Hero: React.FC = () => {
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-20 pb-24 sm:pt-28 sm:pb-32 flex flex-col justify-end min-h-[580px] sm:min-h-[680px]">
         
         {/* Brand Tagline Badge */}
-        <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-900/90 border border-neutral-700/80 backdrop-blur-md text-[#C8C3B3] text-xs font-semibold uppercase tracking-widest mb-6 w-fit animate-in fade-in slide-in-from-bottom-2 duration-300">
-          <Flame size={14} className="text-amber-400" />
-          <span>Street Resilience • Moda Cristiana con Propósito</span>
-        </div>
+        {heroTagline && (
+          <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-neutral-900/90 border border-neutral-700/80 backdrop-blur-md text-[#C8C3B3] text-xs font-semibold uppercase tracking-widest mb-6 w-fit animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <Flame size={14} className="text-amber-400" />
+            <span>{heroTagline}</span>
+          </div>
+        )}
 
         {/* Hero Title */}
         <h1 className="text-4xl sm:text-6xl lg:text-7xl font-black tracking-tight leading-[0.95] text-white uppercase max-w-4xl font-brand-heading">
-          LA PALABRA DE DIOS EN <br />
-          <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8C3B3] via-white to-amber-200">
-            EL ASFALTO Y LA CALLE
-          </span>
+          {(() => {
+            if (heroTitle.includes('\n')) {
+              const lines = heroTitle.split('\n');
+              return (
+                <>
+                  {lines[0]} <br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8C3B3] via-white to-amber-200">
+                    {lines.slice(1).join(' ')}
+                  </span>
+                </>
+              );
+            }
+            if (heroTitle.includes('EN ')) {
+              const parts = heroTitle.split('EN ');
+              return (
+                <>
+                  {parts[0]}EN <br />
+                  <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8C3B3] via-white to-amber-200">
+                    {parts.slice(1).join('EN ')}
+                  </span>
+                </>
+              );
+            }
+            return (
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-[#C8C3B3] via-white to-amber-200">
+                {heroTitle}
+              </span>
+            );
+          })()}
         </h1>
 
         {/* Brand Concept Statement */}
-        <p className="mt-5 text-sm sm:text-base lg:text-lg text-neutral-300 max-w-2xl font-normal leading-relaxed">
-          "Moda y artículos personalizados con propósito: Diseños urbanos que llevan la Palabra de Dios a todos lados, creados por nosotros o diseñados por ti."
-        </p>
+        {heroSubtitle && (
+          <p className="mt-5 text-sm sm:text-base lg:text-lg text-neutral-300 max-w-2xl font-normal leading-relaxed">
+            {heroSubtitle}
+          </p>
+        )}
 
         {/* Action Buttons */}
         <div className="mt-8 flex flex-wrap items-center gap-3.5">
-          <button
-            onClick={() => {
-              setSelectedCategory('todas');
-              setCurrentPage('tienda');
-            }}
-            className="flex items-center justify-center gap-2.5 px-7 py-3.5 bg-[#C8C3B3] hover:bg-white text-black font-extrabold text-xs sm:text-sm uppercase tracking-wider rounded-lg transition-all shadow-xl hover:shadow-[#C8C3B3]/20 active:scale-95 cursor-pointer"
-          >
-            <span>Explorar Colección</span>
-            <ArrowRight size={17} />
-          </button>
+          {button1Text && (
+            <button
+              onClick={() => {
+                if (button1Link === 'personalizador') {
+                  setCurrentPage('personalizador');
+                } else if (button1Link === 'descuentos') {
+                  setCurrentPage('descuentos');
+                } else {
+                  setSelectedCategory('todas');
+                  setCurrentPage('tienda');
+                }
+              }}
+              className="flex items-center justify-center gap-2.5 px-7 py-3.5 bg-[#C8C3B3] hover:bg-white text-black font-extrabold text-xs sm:text-sm uppercase tracking-wider rounded-lg transition-all shadow-xl hover:shadow-[#C8C3B3]/20 active:scale-95 cursor-pointer"
+            >
+              <span>{button1Text}</span>
+              <ArrowRight size={17} />
+            </button>
+          )}
 
-          <button
-            onClick={() => setCurrentPage('personalizador')}
-            className="flex items-center justify-center gap-2 px-6 py-3.5 bg-neutral-900/90 hover:bg-[#0D253A] border border-neutral-700/80 text-white font-bold text-xs sm:text-sm uppercase tracking-wider rounded-lg transition-all backdrop-blur-md active:scale-95 cursor-pointer"
-          >
-            <Sparkles size={16} className="text-amber-400" />
-            <span>Personaliza Tu Fe (Custom Lab)</span>
-          </button>
+          {button2Text && (
+            <button
+              onClick={() => {
+                if (button2Link === 'tienda') {
+                  setSelectedCategory('todas');
+                  setCurrentPage('tienda');
+                } else if (button2Link === 'descuentos') {
+                  setCurrentPage('descuentos');
+                } else {
+                  setCurrentPage('personalizador');
+                }
+              }}
+              className="flex items-center justify-center gap-2 px-6 py-3.5 bg-neutral-900/90 hover:bg-[#0D253A] border border-neutral-700/80 text-white font-bold text-xs sm:text-sm uppercase tracking-wider rounded-lg transition-all backdrop-blur-md active:scale-95 cursor-pointer"
+            >
+              <Sparkles size={16} className="text-amber-400" />
+              <span>{button2Text}</span>
+            </button>
+          )}
         </div>
 
         {/* Streetwear Tech Specs summary */}

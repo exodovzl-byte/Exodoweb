@@ -826,6 +826,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (cloudData.labPricingConfig) setLabPricingConfig(cloudData.labPricingConfig);
         if (cloudData.customLabMockups) setCustomLabMockups(cloudData.customLabMockups);
         if (cloudData.artworkDesigns) setArtworkDesigns(cloudData.artworkDesigns);
+        if (Array.isArray(cloudData.heroSlides) && cloudData.heroSlides.length > 0) setHeroSlides(cloudData.heroSlides);
         if (Array.isArray(cloudData.categoryCircles) && cloudData.categoryCircles.length > 0) setCategoryCircles(cloudData.categoryCircles);
         if (Array.isArray(cloudData.collectionCircles) && cloudData.collectionCircles.length > 0) setCollectionCircles(cloudData.collectionCircles);
         if (Array.isArray(cloudData.devotionals) && cloudData.devotionals.length > 0) setDevotionals(cloudData.devotionals);
