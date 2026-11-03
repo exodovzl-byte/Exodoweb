@@ -14,7 +14,10 @@ import {
   TreasuryAccounts,
   CashTransaction,
   DebtRecord,
-  DailyCashClose
+  DailyCashClose,
+  CategoryCircle,
+  Devotional,
+  PrayerRequest
 } from '../types';
 
 export interface StoreCloudState {
@@ -34,6 +37,11 @@ export interface StoreCloudState {
   cashCloses?: DailyCashClose[];
   aboutContent?: AboutContent;
   socialLinks?: SocialLinks;
+  categoryCircles?: CategoryCircle[];
+  collectionCircles?: CategoryCircle[];
+  devotionals?: Devotional[];
+  prayerRequests?: PrayerRequest[];
+  customCostItems?: any[];
   updatedAt?: string;
   updatedBy?: string;
 }
@@ -103,6 +111,27 @@ export async function saveStoreDataToCloud(
     }
     if (partialData.cashCloses !== undefined) {
       localStorage.setItem('exodo_cash_closes', JSON.stringify(partialData.cashCloses));
+    }
+    if (partialData.categoryCircles !== undefined) {
+      localStorage.setItem('exodo_category_circles', JSON.stringify(partialData.categoryCircles));
+    }
+    if (partialData.collectionCircles !== undefined) {
+      localStorage.setItem('exodo_collection_circles', JSON.stringify(partialData.collectionCircles));
+    }
+    if (partialData.devotionals !== undefined) {
+      localStorage.setItem('exodo_devotionals', JSON.stringify(partialData.devotionals));
+    }
+    if (partialData.prayerRequests !== undefined) {
+      localStorage.setItem('exodo_prayer_requests', JSON.stringify(partialData.prayerRequests));
+    }
+    if (partialData.aboutContent !== undefined) {
+      localStorage.setItem('exodo_about_content', JSON.stringify(partialData.aboutContent));
+    }
+    if (partialData.socialLinks !== undefined) {
+      localStorage.setItem('exodo_social_links', JSON.stringify(partialData.socialLinks));
+    }
+    if (partialData.customCostItems !== undefined) {
+      localStorage.setItem('exodo_custom_cost_items', JSON.stringify(partialData.customCostItems));
     }
     localStorage.setItem(LOCAL_SYNC_TIMESTAMP_KEY, timestamp);
   } catch (e) {

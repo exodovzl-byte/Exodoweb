@@ -56,7 +56,7 @@ export async function saveCashBalancesToFirestore(
     efectivoVES: accounts.efectivoVES ?? 0,
     binanceUSDT: accounts.binanceUSDT ?? 0,
     bancoDelTesoroVES: accounts.bancoDelTesoroVES ?? 0,
-    lastUpdated: accounts.lastUpdated || new Date().toISOString(),
+    lastUpdated: new Date().toISOString(),
     updatedBy,
   };
 

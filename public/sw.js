@@ -1,5 +1,5 @@
 // Service Worker for ÉXODO PWA (sw.js)
-const CACHE_NAME = 'exodo-pwa-v5';
+const CACHE_NAME = 'exodo-pwa-v6';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',

@@ -1,7 +1,6 @@
 import React from 'react';
 import { ShieldCheck, MapPin, Sparkles, Heart, ArrowRight } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
-import { PrayerRequestForm } from '../common/PrayerRequestForm';
 
 export const AboutSection: React.FC = () => {
   const { setCurrentPage, aboutContent } = useStore();
@@ -82,15 +81,6 @@ export const AboutSection: React.FC = () => {
               <ArrowRight size={15} />
             </button>
           </div>
-        </div>
-
-        {/* RESTORED PRAYER REQUEST FORM AT THE END OF ABOUT */}
-        <div className="pt-4">
-          <PrayerRequestForm 
-            source="nosotros" 
-            title="Petición de Oración • Apoyo Pastoral ÉXODO"
-            subtitle="¿Estás pasando por una dificultad o celebrando una victoria? Déjanos tu petición y nuestro equipo estará orando por ti."
-          />
         </div>
 
       </div>

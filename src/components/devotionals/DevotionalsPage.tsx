@@ -15,8 +15,11 @@ import {
 import { INITIAL_DEVOTIONALS } from '../../data/initialData';
 import { Devotional } from '../../types';
 import { PrayerRequestForm } from '../common/PrayerRequestForm';
+import { useStore } from '../../context/StoreContext';
 
 export const DevotionalsPage: React.FC = () => {
+  const { devotionals } = useStore();
+  const activeDevotionals = devotionals && devotionals.length > 0 ? devotionals : INITIAL_DEVOTIONALS;
   const [selectedDevotional, setSelectedDevotional] = useState<Devotional | null>(null);
   const [isQrModalOpen, setIsQrModalOpen] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -65,7 +68,7 @@ export const DevotionalsPage: React.FC = () => {
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
-            {INITIAL_DEVOTIONALS.map((devo) => (
+            {activeDevotionals.map((devo) => (
               <div
                 key={devo.id}
                 onClick={() => setSelectedDevotional(devo)}
@@ -135,7 +138,7 @@ export const DevotionalsPage: React.FC = () => {
           </div>
 
           <div className="space-y-6">
-            {INITIAL_DEVOTIONALS.map((devo) => (
+            {activeDevotionals.map((devo) => (
               <article
                 key={devo.id}
                 className="p-6 sm:p-8 rounded-2xl bg-neutral-950 border border-neutral-800/80 hover:border-neutral-700 transition-colors"

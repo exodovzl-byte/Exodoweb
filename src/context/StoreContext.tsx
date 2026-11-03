@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { 
   Product, 
   CartItem, 
@@ -23,7 +23,8 @@ import {
   CustomLabMockup,
   OrderFinancialSplit,
   PartnerSalaryWithdrawal,
-  MonthlyFinancialSummary
+  MonthlyFinancialSummary,
+  Devotional
 } from '../types';
 
 /**
@@ -67,7 +68,8 @@ import {
   INITIAL_TRANSACTIONS,
   INITIAL_DEBTS,
   INITIAL_CASH_CLOSES,
-  INITIAL_CUSTOM_LAB_MOCKUPS
+  INITIAL_CUSTOM_LAB_MOCKUPS,
+  INITIAL_DEVOTIONALS
 } from '../data/initialData';
 import { sendOrderEmailNotification, sendPrayerEmailNotification } from '../services/emailService';
 import { triggerOrderNotificationFlow, sendNativeNotification, playNotificationChime } from '../utils/notificationUtils';
@@ -213,6 +215,12 @@ interface StoreContextType {
   addCustomLabMockup: (mockup: CustomLabMockup) => void;
   deleteCustomLabMockup: (id: string) => void;
   updateCustomLabMockup: (id: string, updates: Partial<CustomLabMockup>) => void;
+
+  // Devotionals & La Palabra
+  devotionals: Devotional[];
+  addDevotional: (devo: Omit<Devotional, 'id'> | Devotional) => void;
+  updateDevotional: (devo: Devotional) => void;
+  deleteDevotional: (id: string) => void;
 
   // Prayer Requests
   prayerRequests: PrayerRequest[];
@@ -503,6 +511,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return saved ? JSON.parse(saved) : INITIAL_PRAYER_REQUESTS;
   });
 
+  // Devotionals & La Palabra (Reflexiones Bíblicas & Artes 4:5 / 9:16)
+  const [devotionals, setDevotionals] = useState<Devotional[]>(() => {
+    const saved = localStorage.getItem('exodo_devotionals');
+    return saved ? JSON.parse(saved) : INITIAL_DEVOTIONALS;
+  });
+
+  useEffect(() => {
+    localStorage.setItem('exodo_devotionals', JSON.stringify(devotionals));
+  }, [devotionals]);
+
   // Community Posts
   const [communityPosts, setCommunityPosts] = useState<CommunityPost[]>(() => {
     const saved = localStorage.getItem('exodo_community_posts');
@@ -563,67 +581,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const [isFirestoreSynced, setIsFirestoreSynced] = useState<boolean>(false);
 
-  // Ref con el saldo vigente: permite comparar contra la nube sin depender del
-  // cierre (stale closure) de los listeners.
-  const treasuryAccountsRef = useRef<TreasuryAccounts>(treasuryAccounts);
-  useEffect(() => {
-    treasuryAccountsRef.current = treasuryAccounts;
-  }, [treasuryAccounts]);
-
-  // Aplica un saldo que llega de la nube SOLO si es más reciente que el local.
-  // Antes, un documento viejo de Firestore (con saldos en 0) sobreescribía el
-  // ajuste recién guardado al recargar o al pulsar "Nube OK".
-  const applyTreasuryFromCloud = useCallback((incoming?: Partial<TreasuryAccounts> | null) => {
-    if (!incoming) return;
-
-    const local = treasuryAccountsRef.current;
-    const hasLocalBackup = localStorage.getItem('exodo_treasury_accounts') !== null;
-    const localTime = local?.lastUpdated ? Date.parse(local.lastUpdated) : 0;
-    const incomingTime = incoming.lastUpdated ? Date.parse(incoming.lastUpdated) : 0;
-
-    // Este dispositivo ya tenía saldos guardados y son igual de nuevos o más
-    // nuevos que la nube: se conservan y se vuelven a publicar para reparar el
-    // documento atrasado (solo si de verdad hay algo que reparar, para no
-    // entrar en un bucle de escrituras con el eco de Firestore).
-    if (hasLocalBackup && localTime > 0 && localTime >= incomingTime) {
-      const differs =
-        (incoming.efectivoUSD ?? local.efectivoUSD) !== local.efectivoUSD ||
-        (incoming.efectivoVES ?? local.efectivoVES) !== local.efectivoVES ||
-        (incoming.binanceUSDT ?? local.binanceUSDT) !== local.binanceUSDT ||
-        (incoming.bancoDelTesoroVES ?? local.bancoDelTesoroVES) !== local.bancoDelTesoroVES;
-      if (incomingTime < localTime || differs) {
-        saveCashBalancesToFirestore(local).catch(() => {});
-        saveStoreDataToCloud({ treasuryAccounts: local }).catch(() => {});
-      }
-      return;
-    }
-
-    const next: TreasuryAccounts = {
-      efectivoUSD: incoming.efectivoUSD ?? local.efectivoUSD,
-      efectivoVES: incoming.efectivoVES ?? local.efectivoVES,
-      binanceUSDT: incoming.binanceUSDT ?? local.binanceUSDT,
-      bancoDelTesoroVES: incoming.bancoDelTesoroVES ?? local.bancoDelTesoroVES,
-      lastUpdated: incoming.lastUpdated || local.lastUpdated,
-    };
-    const changed =
-      next.efectivoUSD !== local.efectivoUSD ||
-      next.efectivoVES !== local.efectivoVES ||
-      next.binanceUSDT !== local.binanceUSDT ||
-      next.bancoDelTesoroVES !== local.bancoDelTesoroVES;
-    treasuryAccountsRef.current = next;
-    setTreasuryAccounts(next);
-    // Si la nube traía un saldo más nuevo, se replica al documento principal
-    // para que ambos documentos queden siempre alineados.
-    if (changed) {
-      saveStoreDataToCloud({ treasuryAccounts: next });
-    }
-  }, []);
-
   // Real-time Firestore sync listener for multi-device admin support
   useEffect(() => {
     const unsubscribe = subscribeToFirestoreCashBalances(
       (firestoreData) => {
-        applyTreasuryFromCloud(firestoreData);
+        setTreasuryAccounts((prev) => {
+          const localTs = prev.lastUpdated ? new Date(prev.lastUpdated).getTime() : 0;
+          const cloudTs = firestoreData.lastUpdated ? new Date(firestoreData.lastUpdated).getTime() : 0;
+          if (cloudTs >= localTs) {
+            const next = {
+              ...prev,
+              efectivoUSD: firestoreData.efectivoUSD ?? prev.efectivoUSD,
+              efectivoVES: firestoreData.efectivoVES ?? prev.efectivoVES,
+              binanceUSDT: firestoreData.binanceUSDT ?? prev.binanceUSDT,
+              bancoDelTesoroVES: firestoreData.bancoDelTesoroVES ?? prev.bancoDelTesoroVES,
+              lastUpdated: firestoreData.lastUpdated,
+            };
+            localStorage.setItem('exodo_treasury_accounts', JSON.stringify(next));
+            localStorage.setItem('exodo_cash_balances', JSON.stringify(next));
+            return next;
+          }
+          return prev;
+        });
         setIsFirestoreSynced(true);
       },
       () => {
@@ -631,7 +610,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       }
     );
     return () => unsubscribe();
-  }, [applyTreasuryFromCloud]);
+  }, []);
 
   // Cash Transactions (Ingresos, Egresos, Retiros)
   const [transactions, setTransactions] = useState<CashTransaction[]>(() => {
@@ -693,19 +672,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     return localStorage.getItem('exodo_cloud_sync_timestamp');
   });
 
-  // El sello de sincronización solo avanza: nunca debe retroceder a una fecha
-  // vieja de la nube y hacer que el próximo evento pise cambios locales.
-  const rememberCloudTimestamp = useCallback((timestamp?: string | null) => {
-    if (!timestamp) return;
-    const current = localStorage.getItem('exodo_cloud_sync_timestamp');
-    const incomingTime = new Date(timestamp).getTime();
-    const currentTime = current ? new Date(current).getTime() : 0;
-    if (!current || incomingTime >= currentTime) {
-      setLastCloudSyncTimestamp(timestamp);
-      localStorage.setItem('exodo_cloud_sync_timestamp', timestamp);
-    }
-  }, []);
-
   // Cross-Device Real-Time Cloud Synchronization
   useEffect(() => {
     let isMounted = true;
@@ -753,6 +719,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (cloudData.collections) setCollections(cloudData.collections);
         if (cloudData.aboutContent) setAboutContent(cloudData.aboutContent);
         if (cloudData.socialLinks) setSocialLinks(cloudData.socialLinks);
+        if (Array.isArray(cloudData.categoryCircles) && cloudData.categoryCircles.length > 0) setCategoryCircles(cloudData.categoryCircles);
+        if (Array.isArray(cloudData.collectionCircles) && cloudData.collectionCircles.length > 0) setCollectionCircles(cloudData.collectionCircles);
+        if (Array.isArray(cloudData.devotionals) && cloudData.devotionals.length > 0) setDevotionals(cloudData.devotionals);
+        if (Array.isArray(cloudData.prayerRequests)) setPrayerRequests(cloudData.prayerRequests);
         if (Array.isArray(cloudData.partnerWithdrawals)) {
           setPartnerWithdrawals(cloudData.partnerWithdrawals);
         }
@@ -763,7 +733,17 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setExchangeRateBCV(cloudData.exchangeRateBCV);
         }
         if (cloudData.treasuryAccounts) {
-          applyTreasuryFromCloud(cloudData.treasuryAccounts);
+          const accounts = cloudData.treasuryAccounts;
+          setTreasuryAccounts((prev) => {
+            const localTs = prev.lastUpdated ? new Date(prev.lastUpdated).getTime() : 0;
+            const cloudTs = accounts.lastUpdated ? new Date(accounts.lastUpdated).getTime() : 0;
+            if (cloudTs >= localTs) {
+              localStorage.setItem('exodo_treasury_accounts', JSON.stringify(accounts));
+              localStorage.setItem('exodo_cash_balances', JSON.stringify(accounts));
+              return accounts;
+            }
+            return prev;
+          });
         }
         if (Array.isArray(cloudData.transactions)) {
           setTransactions(cloudData.transactions);
@@ -775,7 +755,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           setCashCloses(cloudData.cashCloses);
         }
         if (cloudData.updatedAt) {
-          rememberCloudTimestamp(cloudData.updatedAt);
+          setLastCloudSyncTimestamp(cloudData.updatedAt);
+          localStorage.setItem('exodo_cloud_sync_timestamp', cloudData.updatedAt);
         }
         setIsCloudSyncing(false);
       })
@@ -803,15 +784,32 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (incoming.collections) setCollections(incoming.collections);
       if (incoming.aboutContent) setAboutContent(incoming.aboutContent);
       if (incoming.socialLinks) setSocialLinks(incoming.socialLinks);
+      if (Array.isArray(incoming.categoryCircles) && incoming.categoryCircles.length > 0) setCategoryCircles(incoming.categoryCircles);
+      if (Array.isArray(incoming.collectionCircles) && incoming.collectionCircles.length > 0) setCollectionCircles(incoming.collectionCircles);
+      if (Array.isArray(incoming.devotionals) && incoming.devotionals.length > 0) setDevotionals(incoming.devotionals);
+      if (Array.isArray(incoming.prayerRequests)) setPrayerRequests(incoming.prayerRequests);
       if (Array.isArray(incoming.orders)) setOrders(incoming.orders);
       if (Array.isArray(incoming.partnerWithdrawals)) setPartnerWithdrawals(incoming.partnerWithdrawals);
       if (typeof incoming.exchangeRateBCV === 'number' && incoming.exchangeRateBCV > 0) setExchangeRateBCV(incoming.exchangeRateBCV);
-      if (incoming.treasuryAccounts) applyTreasuryFromCloud(incoming.treasuryAccounts);
+      if (incoming.treasuryAccounts) {
+        const accounts = incoming.treasuryAccounts;
+        setTreasuryAccounts((prev) => {
+          const localTs = prev.lastUpdated ? new Date(prev.lastUpdated).getTime() : 0;
+          const cloudTs = accounts.lastUpdated ? new Date(accounts.lastUpdated).getTime() : 0;
+          if (cloudTs >= localTs) {
+            localStorage.setItem('exodo_treasury_accounts', JSON.stringify(accounts));
+            localStorage.setItem('exodo_cash_balances', JSON.stringify(accounts));
+            return accounts;
+          }
+          return prev;
+        });
+      }
       if (Array.isArray(incoming.transactions)) setTransactions(incoming.transactions);
       if (Array.isArray(incoming.debts)) setDebts(incoming.debts);
       if (Array.isArray(incoming.cashCloses)) setCashCloses(incoming.cashCloses);
       if (incoming.updatedAt) {
-        rememberCloudTimestamp(incoming.updatedAt);
+        setLastCloudSyncTimestamp(incoming.updatedAt);
+        localStorage.setItem('exodo_cloud_sync_timestamp', incoming.updatedAt);
       }
     });
 
@@ -828,12 +826,29 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         if (cloudData.labPricingConfig) setLabPricingConfig(cloudData.labPricingConfig);
         if (cloudData.customLabMockups) setCustomLabMockups(cloudData.customLabMockups);
         if (cloudData.artworkDesigns) setArtworkDesigns(cloudData.artworkDesigns);
+        if (Array.isArray(cloudData.categoryCircles) && cloudData.categoryCircles.length > 0) setCategoryCircles(cloudData.categoryCircles);
+        if (Array.isArray(cloudData.collectionCircles) && cloudData.collectionCircles.length > 0) setCollectionCircles(cloudData.collectionCircles);
+        if (Array.isArray(cloudData.devotionals) && cloudData.devotionals.length > 0) setDevotionals(cloudData.devotionals);
+        if (Array.isArray(cloudData.prayerRequests)) setPrayerRequests(cloudData.prayerRequests);
         if (Array.isArray(cloudData.partnerWithdrawals)) setPartnerWithdrawals(cloudData.partnerWithdrawals);
         if (Array.isArray(cloudData.orders)) setOrders(cloudData.orders);
         if (typeof cloudData.exchangeRateBCV === 'number' && cloudData.exchangeRateBCV > 0) setExchangeRateBCV(cloudData.exchangeRateBCV);
-        if (cloudData.treasuryAccounts) applyTreasuryFromCloud(cloudData.treasuryAccounts);
+        if (cloudData.treasuryAccounts) {
+          const accounts = cloudData.treasuryAccounts;
+          setTreasuryAccounts((prev) => {
+            const localTs = prev.lastUpdated ? new Date(prev.lastUpdated).getTime() : 0;
+            const cloudTs = accounts.lastUpdated ? new Date(accounts.lastUpdated).getTime() : 0;
+            if (cloudTs >= localTs) {
+              localStorage.setItem('exodo_treasury_accounts', JSON.stringify(accounts));
+              localStorage.setItem('exodo_cash_balances', JSON.stringify(accounts));
+              return accounts;
+            }
+            return prev;
+          });
+        }
         if (cloudData.updatedAt) {
-          rememberCloudTimestamp(cloudData.updatedAt);
+          setLastCloudSyncTimestamp(cloudData.updatedAt);
+          localStorage.setItem('exodo_cloud_sync_timestamp', cloudData.updatedAt);
         }
       }).catch(() => {});
     };
@@ -1332,48 +1347,69 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
     if (creditAccount && order.paymentStatus === 'Verificado') {
       const isBinance = order.paymentMethod === 'binance';
+      const nowIso = new Date().toISOString();
       if (isBinance) {
-        setTreasuryAccounts((prev) => ({
-          ...prev,
-          binanceUSDT: prev.binanceUSDT + order.totalUSD,
-          lastUpdated: new Date().toISOString(),
-        }));
-        setTransactions((prev) => [
-          {
-            id: `tx-man-${Date.now()}`,
-            account: 'binance_usdt',
-            type: 'ingreso',
-            amount: order.totalUSD,
-            amountUSD: order.totalUSD,
-            concept: `Ingreso automático por Pedido Manual ${order.orderCode} (${order.customerName})`,
-            category: 'pedido',
-            date: order.createdAt || new Date().toISOString(),
-            relatedOrderCode: order.orderCode,
-            registeredBy: 'Admin Manual',
-          },
-          ...prev,
-        ]);
+        const nextAccounts: TreasuryAccounts = {
+          ...treasuryAccounts,
+          binanceUSDT: Number(treasuryAccounts.binanceUSDT || 0) + order.totalUSD,
+          lastUpdated: nowIso,
+        };
+        const newTx: CashTransaction = {
+          id: `tx-man-${Date.now()}`,
+          account: 'binance_usdt',
+          type: 'ingreso',
+          amount: order.totalUSD,
+          amountUSD: order.totalUSD,
+          concept: `Ingreso automático por Pedido Manual ${order.orderCode} (${order.customerName})`,
+          category: 'pedido',
+          date: order.createdAt || nowIso,
+          relatedOrderCode: order.orderCode,
+          registeredBy: 'Admin Manual',
+        };
+        const nextTxs = [newTx, ...transactions];
+        setTreasuryAccounts(nextAccounts);
+        setTransactions(nextTxs);
+        localStorage.setItem('exodo_treasury_accounts', JSON.stringify(nextAccounts));
+        localStorage.setItem('exodo_cash_balances', JSON.stringify(nextAccounts));
+        localStorage.setItem('exodo_cash_transactions', JSON.stringify(nextTxs));
+        localStorage.setItem('exodo_transactions', JSON.stringify(nextTxs));
+        saveCashBalancesToFirestore(nextAccounts);
+        saveCashTransactionToFirestore(newTx);
+        saveStoreDataToCloud({
+          treasuryAccounts: nextAccounts,
+          transactions: nextTxs,
+        });
       } else {
-        setTreasuryAccounts((prev) => ({
-          ...prev,
-          bancoDelTesoroVES: prev.bancoDelTesoroVES + order.totalVES,
-          lastUpdated: new Date().toISOString(),
-        }));
-        setTransactions((prev) => [
-          {
-            id: `tx-man-${Date.now()}`,
-            account: 'banco_del_tesoro_ves',
-            type: 'ingreso',
-            amount: order.totalVES,
-            amountUSD: order.totalUSD,
-            concept: `Ingreso automático Pago Móvil por Pedido Manual ${order.orderCode} (${order.customerName})`,
-            category: 'pedido',
-            date: order.createdAt || new Date().toISOString(),
-            relatedOrderCode: order.orderCode,
-            registeredBy: 'Admin Manual',
-          },
-          ...prev,
-        ]);
+        const nextAccounts: TreasuryAccounts = {
+          ...treasuryAccounts,
+          bancoDelTesoroVES: Number(treasuryAccounts.bancoDelTesoroVES || 0) + order.totalVES,
+          lastUpdated: nowIso,
+        };
+        const newTx: CashTransaction = {
+          id: `tx-man-${Date.now()}`,
+          account: 'banco_del_tesoro_ves',
+          type: 'ingreso',
+          amount: order.totalVES,
+          amountUSD: order.totalUSD,
+          concept: `Ingreso automático Pago Móvil por Pedido Manual ${order.orderCode} (${order.customerName})`,
+          category: 'pedido',
+          date: order.createdAt || nowIso,
+          relatedOrderCode: order.orderCode,
+          registeredBy: 'Admin Manual',
+        };
+        const nextTxs = [newTx, ...transactions];
+        setTreasuryAccounts(nextAccounts);
+        setTransactions(nextTxs);
+        localStorage.setItem('exodo_treasury_accounts', JSON.stringify(nextAccounts));
+        localStorage.setItem('exodo_cash_balances', JSON.stringify(nextAccounts));
+        localStorage.setItem('exodo_cash_transactions', JSON.stringify(nextTxs));
+        localStorage.setItem('exodo_transactions', JSON.stringify(nextTxs));
+        saveCashBalancesToFirestore(nextAccounts);
+        saveCashTransactionToFirestore(newTx);
+        saveStoreDataToCloud({
+          treasuryAccounts: nextAccounts,
+          transactions: nextTxs,
+        });
       }
     }
   };
@@ -1389,19 +1425,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       account === 'banco_del_tesoro_ves' ? 'bancoDelTesoroVES' :
       account === 'efectivo_usd' ? 'efectivoUSD' : 'efectivoVES';
 
-    const currentAccounts = treasuryAccountsRef.current;
-    const currentVal = Number(currentAccounts[fieldKey] || 0);
+    const currentVal = Number(treasuryAccounts[fieldKey] || 0);
     const diff = newBalance - currentVal;
+    const nowIso = new Date().toISOString();
 
     const updatedAccounts: TreasuryAccounts = {
-      ...currentAccounts,
+      ...treasuryAccounts,
       [fieldKey]: Math.max(0, newBalance),
-      lastUpdated: new Date().toISOString(),
+      lastUpdated: nowIso,
     };
     setTreasuryAccounts(updatedAccounts);
-    treasuryAccountsRef.current = updatedAccounts;
+    localStorage.setItem('exodo_treasury_accounts', JSON.stringify(updatedAccounts));
+    localStorage.setItem('exodo_cash_balances', JSON.stringify(updatedAccounts));
     saveCashBalancesToFirestore(updatedAccounts);
 
+    let nextTransactions = transactions;
     if (Math.abs(diff) > 0.001) {
       const isUSD = account === 'binance_usdt' || account === 'efectivo_usd';
       const amountUSD = isUSD ? Math.abs(diff) : Math.abs(diff) / exchangeRateBCV;
@@ -1418,25 +1456,21 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         amountUSD,
         concept: `Ajuste manual de saldo en ${accountLabel}: ${diff >= 0 ? '+' : '-'}${Math.abs(diff).toFixed(2)}. ${note || ''}`,
         category: 'ajuste_manual',
-        date: new Date().toISOString(),
+        date: nowIso,
         registeredBy: 'Administrador',
       };
 
-      setTransactions((prev) => {
-        const nextTransactions = [adjTx, ...prev];
-        // Guardar el saldo y el movimiento juntos en el documento principal:
-        // antes solo se escribía la colección de tesorería y al recargar la
-        // nube devolvía el saldo viejo (0).
-        saveStoreDataToCloud({
-          treasuryAccounts: updatedAccounts,
-          transactions: nextTransactions,
-        });
-        return nextTransactions;
-      });
+      nextTransactions = [adjTx, ...transactions];
+      setTransactions(nextTransactions);
+      localStorage.setItem('exodo_cash_transactions', JSON.stringify(nextTransactions));
+      localStorage.setItem('exodo_transactions', JSON.stringify(nextTransactions));
       saveCashTransactionToFirestore(adjTx);
-    } else {
-      saveStoreDataToCloud({ treasuryAccounts: updatedAccounts });
     }
+
+    saveStoreDataToCloud({
+      treasuryAccounts: updatedAccounts,
+      transactions: nextTransactions,
+    });
   };
 
   const recordCashOperation = (params: {
@@ -1450,6 +1484,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   }) => {
     const isUSD = params.account === 'binance_usdt' || params.account === 'efectivo_usd';
     const amountUSD = isUSD ? params.amount : params.amount / (params.exchangeRateUsed || exchangeRateBCV);
+    const nowIso = new Date().toISOString();
 
     const tx: CashTransaction = {
       id: `tx-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -1459,17 +1494,16 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       amountUSD,
       concept: params.concept,
       category: params.category || (params.type === 'ingreso' ? 'pedido' : 'gasto_operativo'),
-      date: new Date().toISOString(),
+      date: nowIso,
       registeredBy: 'Administrador',
       counterpartAccount: params.counterpartAccount,
       exchangeRateUsed: params.exchangeRateUsed,
     };
 
-    setTransactions((prev) => {
-      const nextTransactions = [tx, ...prev];
-      saveStoreDataToCloud({ transactions: nextTransactions });
-      return nextTransactions;
-    });
+    const nextTxs = [tx, ...transactions];
+    setTransactions(nextTxs);
+    localStorage.setItem('exodo_cash_transactions', JSON.stringify(nextTxs));
+    localStorage.setItem('exodo_transactions', JSON.stringify(nextTxs));
     saveCashTransactionToFirestore(tx);
 
     setTreasuryAccounts((prev) => {
@@ -1509,27 +1543,31 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
       }
 
-      next.lastUpdated = new Date().toISOString();
-      treasuryAccountsRef.current = next;
+      next.lastUpdated = nowIso;
+      localStorage.setItem('exodo_treasury_accounts', JSON.stringify(next));
+      localStorage.setItem('exodo_cash_balances', JSON.stringify(next));
       saveCashBalancesToFirestore(next);
-      saveStoreDataToCloud({ treasuryAccounts: next });
+      saveStoreDataToCloud({
+        treasuryAccounts: next,
+        transactions: nextTxs,
+      });
       return next;
     });
   };
 
   const addTransaction = (tx: Omit<CashTransaction, 'id' | 'date'>) => {
     const isUSD = tx.account === 'binance_usdt' || tx.account === 'efectivo_usd';
+    const nowIso = new Date().toISOString();
     const newTx: CashTransaction = {
       ...tx,
       amountUSD: tx.amountUSD ?? (isUSD ? tx.amount : tx.amount / exchangeRateBCV),
       id: `tx-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-      date: new Date().toISOString(),
+      date: nowIso,
     };
-    setTransactions((prev) => {
-      const nextTransactions = [newTx, ...prev];
-      saveStoreDataToCloud({ transactions: nextTransactions });
-      return nextTransactions;
-    });
+    const nextTxs = [newTx, ...transactions];
+    setTransactions(nextTxs);
+    localStorage.setItem('exodo_cash_transactions', JSON.stringify(nextTxs));
+    localStorage.setItem('exodo_transactions', JSON.stringify(nextTxs));
     saveCashTransactionToFirestore(newTx);
 
     // Update account balance
@@ -1545,20 +1583,26 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       const nextAccounts: TreasuryAccounts = {
         ...prev,
         [fieldKey]: Math.max(0, updated),
-        lastUpdated: new Date().toISOString(),
+        lastUpdated: nowIso,
       };
-      treasuryAccountsRef.current = nextAccounts;
+      localStorage.setItem('exodo_treasury_accounts', JSON.stringify(nextAccounts));
+      localStorage.setItem('exodo_cash_balances', JSON.stringify(nextAccounts));
       saveCashBalancesToFirestore(nextAccounts);
-      saveStoreDataToCloud({ treasuryAccounts: nextAccounts });
+      saveStoreDataToCloud({
+        treasuryAccounts: nextAccounts,
+        transactions: nextTxs,
+      });
       return nextAccounts;
     });
   };
 
   const deleteTransaction = (id: string) => {
     setTransactions((prev) => {
-      const nextTransactions = prev.filter((t) => t.id !== id);
-      saveStoreDataToCloud({ transactions: nextTransactions });
-      return nextTransactions;
+      const next = prev.filter((t) => t.id !== id);
+      localStorage.setItem('exodo_cash_transactions', JSON.stringify(next));
+      localStorage.setItem('exodo_transactions', JSON.stringify(next));
+      saveStoreDataToCloud({ transactions: next });
+      return next;
     });
   };
 
@@ -1575,25 +1619,28 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       createdAt: new Date().toISOString().split('T')[0],
     };
     setDebts((prev) => {
-      const nextDebts = [newDebt, ...prev];
-      saveStoreDataToCloud({ debts: nextDebts });
-      return nextDebts;
+      const next = [newDebt, ...prev];
+      localStorage.setItem('exodo_debts', JSON.stringify(next));
+      saveStoreDataToCloud({ debts: next });
+      return next;
     });
   };
 
   const updateDebt = (id: string, updates: Partial<DebtRecord>) => {
     setDebts((prev) => {
-      const nextDebts = prev.map((d) => (d.id === id ? { ...d, ...updates } : d));
-      saveStoreDataToCloud({ debts: nextDebts });
-      return nextDebts;
+      const next = prev.map((d) => (d.id === id ? { ...d, ...updates } : d));
+      localStorage.setItem('exodo_debts', JSON.stringify(next));
+      saveStoreDataToCloud({ debts: next });
+      return next;
     });
   };
 
   const deleteDebt = (id: string) => {
     setDebts((prev) => {
-      const nextDebts = prev.filter((d) => d.id !== id);
-      saveStoreDataToCloud({ debts: nextDebts });
-      return nextDebts;
+      const next = prev.filter((d) => d.id !== id);
+      localStorage.setItem('exodo_debts', JSON.stringify(next));
+      saveStoreDataToCloud({ debts: next });
+      return next;
     });
   };
 
@@ -1603,14 +1650,14 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     amountVES: number,
     targetAccount: 'binance_usdt' | 'banco_del_tesoro_ves' | 'efectivo_usd' | 'efectivo_ves'
   ) => {
-    setDebts((prev) => {
-      const nextDebts = prev.map((d) => {
+    setDebts((prev) =>
+      prev.map((d) => {
         if (d.id !== id) return d;
         const newPaidUSD = d.paidUSD + amountUSD;
         const newPaidVES = d.paidVES + amountVES;
         const newRemainingUSD = Math.max(0, d.totalUSD - newPaidUSD);
         const newRemainingVES = Math.max(0, d.totalVES - newPaidVES);
-        const newStatus: DebtRecord['status'] = newRemainingUSD <= 0.05 ? 'cobrado' : 'abonado';
+        const newStatus = newRemainingUSD <= 0.05 ? 'cobrado' : 'abonado';
         return {
           ...d,
           paidUSD: newPaidUSD,
@@ -1619,10 +1666,8 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           remainingVES: newRemainingVES,
           status: newStatus,
         };
-      });
-      saveStoreDataToCloud({ debts: nextDebts });
-      return nextDebts;
-    });
+      })
+    );
 
     // Auto-create income transaction
     const targetAmount = targetAccount === 'binance_usdt' ? amountUSD : amountVES;
@@ -1677,9 +1722,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     };
 
     setCashCloses((prev) => {
-      const nextCloses = [newClose, ...prev];
-      saveStoreDataToCloud({ cashCloses: nextCloses });
-      return nextCloses;
+      const next = [newClose, ...prev];
+      localStorage.setItem('exodo_cash_closes', JSON.stringify(next));
+      saveStoreDataToCloud({ cashCloses: next });
+      return next;
     });
     addAdminNotification({
       title: `📊 Cierre de Caja Realizado: ${date}`,
@@ -1899,15 +1945,27 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   // Circles
   const addCategoryCircle = (circle: CategoryCircle) => {
-    setCategoryCircles((prev) => [...prev, circle]);
+    setCategoryCircles((prev) => {
+      const next = [...prev, circle];
+      saveStoreDataToCloud({ categoryCircles: next });
+      return next;
+    });
   };
 
   const updateCategoryCircle = (circle: CategoryCircle) => {
-    setCategoryCircles((prev) => prev.map((c) => (c.id === circle.id ? circle : c)));
+    setCategoryCircles((prev) => {
+      const next = prev.map((c) => (c.id === circle.id ? circle : c));
+      saveStoreDataToCloud({ categoryCircles: next });
+      return next;
+    });
   };
 
   const deleteCategoryCircle = (id: string) => {
-    setCategoryCircles((prev) => prev.filter((c) => c.id !== id));
+    setCategoryCircles((prev) => {
+      const next = prev.filter((c) => c.id !== id);
+      saveStoreDataToCloud({ categoryCircles: next });
+      return next;
+    });
   };
 
   // User auth
@@ -2262,17 +2320,61 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   };
 
   const updateAboutContent = (content: Partial<AboutContent>) => {
-    setAboutContent((prev) => ({ ...prev, ...content }));
+    setAboutContent((prev) => {
+      const next = { ...prev, ...content };
+      saveStoreDataToCloud({ aboutContent: next });
+      return next;
+    });
   };
 
   const updateSocialLinks = (links: Partial<SocialLinks>) => {
-    setSocialLinks((prev) => ({ ...prev, ...links }));
+    setSocialLinks((prev) => {
+      const next = { ...prev, ...links };
+      saveStoreDataToCloud({ socialLinks: next });
+      return next;
+    });
   };
 
   const updateCommunityPosts = (posts: CommunityPost[]) => {
     setCommunityPosts(posts);
   };
 
+  // Devotionals & La Palabra Management
+  const addDevotional = (devo: Omit<Devotional, 'id'> | Devotional) => {
+    const newDevo: Devotional = {
+      ...devo,
+      id: 'id' in devo && devo.id ? devo.id : `devo-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+      date: devo.date || new Date().toISOString().split('T')[0],
+    };
+    setDevotionals((prev) => {
+      const next = [newDevo, ...prev];
+      saveStoreDataToCloud({ devotionals: next });
+      return next;
+    });
+    addAdminNotification({
+      title: '📖 Nuevo Devocional Publicado',
+      message: `"${newDevo.title}" ha sido añadido a La Palabra.`,
+      type: 'delivery',
+    });
+  };
+
+  const updateDevotional = (devo: Devotional) => {
+    setDevotionals((prev) => {
+      const next = prev.map((d) => (d.id === devo.id ? devo : d));
+      saveStoreDataToCloud({ devotionals: next });
+      return next;
+    });
+  };
+
+  const deleteDevotional = (id: string) => {
+    setDevotionals((prev) => {
+      const next = prev.filter((d) => d.id !== id);
+      saveStoreDataToCloud({ devotionals: next });
+      return next;
+    });
+  };
+
+  // Prayer Requests Management
   const addPrayerRequest = async (req: Omit<PrayerRequest, 'id' | 'createdAt' | 'status'>) => {
     const newRequest: PrayerRequest = {
       ...req,
@@ -2280,18 +2382,37 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       createdAt: new Date().toISOString().split('T')[0],
       status: 'nueva',
     };
-    setPrayerRequests((prev) => [newRequest, ...prev]);
+    setPrayerRequests((prev) => {
+      const next = [newRequest, ...prev];
+      saveStoreDataToCloud({ prayerRequests: next });
+      return next;
+    });
+
+    const clientName = req.name || req.fullName || 'Hermano/a';
+    const textSnippet = req.requestText || req.request || '';
+    addAdminNotification({
+      title: `🙏 Nueva Petición de Oración: ${clientName}`,
+      message: `${req.category ? `[${req.category.toUpperCase()}] ` : ''}${textSnippet.substring(0, 80)}... (Tel: ${req.phone})`,
+      type: 'prayer',
+    });
+
     await sendPrayerEmailNotification(newRequest);
   };
 
   const updatePrayerRequestStatus = (id: string, status: 'nueva' | 'en_oracion' | 'respondida') => {
-    setPrayerRequests((prev) =>
-      prev.map((p) => (p.id === id ? { ...p, status } : p))
-    );
+    setPrayerRequests((prev) => {
+      const next = prev.map((p) => (p.id === id ? { ...p, status } : p));
+      saveStoreDataToCloud({ prayerRequests: next });
+      return next;
+    });
   };
 
   const deletePrayerRequest = (id: string) => {
-    setPrayerRequests((prev) => prev.filter((p) => p.id !== id));
+    setPrayerRequests((prev) => {
+      const next = prev.filter((p) => p.id !== id);
+      saveStoreDataToCloud({ prayerRequests: next });
+      return next;
+    });
   };
 
   const resetTestData = (adminPin?: string): { success: boolean; error?: string } => {
@@ -2316,7 +2437,6 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       lastUpdated: new Date().toISOString(),
     };
     setTreasuryAccounts(zeroAccounts);
-    treasuryAccountsRef.current = zeroAccounts;
 
     // 2. Persist empty clean arrays in localStorage
     localStorage.setItem('exodo_orders', JSON.stringify([]));
@@ -2371,21 +2491,23 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         heroSlides,
         collections,
         orders,
-        aboutContent,
-        socialLinks,
         partnerWithdrawals,
         exchangeRateBCV,
         treasuryAccounts,
         transactions,
         debts,
         cashCloses,
+        aboutContent,
+        socialLinks,
+        categoryCircles,
+        collectionCircles,
+        devotionals,
+        prayerRequests,
       });
-      // La tesorería también se respalda en su documento propio, que es el que
-      // alimenta los saldos en tiempo real de todos los dispositivos.
       await saveCashBalancesToFirestore(treasuryAccounts);
       const latest = await fetchStoreDataFromCloud();
       if (latest?.updatedAt) {
-        rememberCloudTimestamp(latest.updatedAt);
+        setLastCloudSyncTimestamp(latest.updatedAt);
       }
     } catch (e) {
       console.warn('Sync manual error:', e);
@@ -2484,6 +2606,12 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         updateSocialLinks,
         communityPosts,
         updateCommunityPosts,
+        // Devotionals & La Palabra
+        devotionals,
+        addDevotional,
+        updateDevotional,
+        deleteDevotional,
+        // Prayer Requests
         prayerRequests,
         addPrayerRequest,
         updatePrayerRequestStatus,

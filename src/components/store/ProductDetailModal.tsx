@@ -230,10 +230,12 @@ export const ProductDetailModal: React.FC = () => {
             
             <div>
               {/* Collection & Scripture Tag */}
-              <div className="flex items-center gap-2 text-xs font-mono text-amber-400 font-semibold uppercase tracking-wider">
-                <Sparkles size={13} />
-                <span>{product.scripture.split('—')[0]}</span>
-              </div>
+              {product.scripture && product.scripture.trim().length > 0 && (
+                <div className="flex items-center gap-2 text-xs font-mono text-amber-400 font-semibold uppercase tracking-wider">
+                  <Sparkles size={13} />
+                  <span>{product.scripture.split('—')[0]}</span>
+                </div>
+              )}
 
               {/* Title */}
               <h2 className="text-2xl sm:text-3xl font-black text-white uppercase tracking-tight mt-1 font-brand-heading">
@@ -304,10 +306,12 @@ export const ProductDetailModal: React.FC = () => {
                 <p className="font-semibold text-neutral-200">
                   {product.unifiedDescription}
                 </p>
-                <div className="pt-2 border-t border-neutral-800/80 text-[11px] text-neutral-400">
-                  <strong className="text-amber-400 uppercase font-mono block mb-0.5">Versículo Central:</strong>
-                  <span className="italic">"{product.scripture}"</span>
-                </div>
+                {product.scripture && product.scripture.trim().length > 0 && (
+                  <div className="pt-2 border-t border-neutral-800/80 text-[11px] text-neutral-400">
+                    <strong className="text-amber-400 uppercase font-mono block mb-0.5">Versículo Central:</strong>
+                    <span className="italic">"{product.scripture}"</span>
+                  </div>
+                )}
               </div>
 
               {/* APPAREL VARIANT SELECTORS */}

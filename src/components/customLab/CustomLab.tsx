@@ -106,12 +106,16 @@ export const CustomLab: React.FC = () => {
   const [printLocation, setPrintLocation] = useState<'delante' | 'detras' | 'ambos_lados'>('delante');
   const [canvasView, setCanvasView] = useState<'delante' | 'detras'>('delante');
 
-  // Medidas en Centímetros del Estampado
+  // Cotizador Dinámico DTF Oficial: Ancho fijo 58 cm, largo en cm definido por cliente
+  const [designLengthCm, setDesignLengthCm] = useState<number>(30); // 30 cm por defecto (A4)
+  const [secondaryLengthCm, setSecondaryLengthCm] = useState<number>(12); // 12 cm por defecto (pecho/secundario)
+
+  // Medidas Presets de Estampado
   const printAreaSizes: PrintAreaSizeConfig[] = labPricingConfig?.printAreaSizes || [
-    { id: 'pocket', label: 'Bolsillo / Pecho', dimensionsCm: '10 x 10 cm', surchargeUSD: 0, recommendedFor: 'Pecho o manga' },
-    { id: 'a4', label: 'Estándar A4', dimensionsCm: '21 x 30 cm', surchargeUSD: 0, recommendedFor: 'Frente o espalda estándar' },
-    { id: 'a3', label: 'Grande A3', dimensionsCm: '30 x 42 cm', surchargeUSD: 2, recommendedFor: 'Espalda completa protagonista' },
-    { id: 'maxi', label: 'Maxi Print XL', dimensionsCm: '35 x 48 cm', surchargeUSD: 4, recommendedFor: 'Oversize full print' },
+    { id: 'pocket', label: 'Bolsillo / Pecho', dimensionsCm: '58 x 10 cm', surchargeUSD: 0, recommendedFor: 'Pecho o manga' },
+    { id: 'a4', label: 'Estándar A4', dimensionsCm: '58 x 30 cm', surchargeUSD: 0, recommendedFor: 'Frente o espalda estándar' },
+    { id: 'a3', label: 'Grande A3', dimensionsCm: '58 x 42 cm', surchargeUSD: 0, recommendedFor: 'Espalda completa protagonista' },
+    { id: 'maxi', label: 'Maxi Print XL', dimensionsCm: '58 x 50 cm', surchargeUSD: 0, recommendedFor: 'Oversize full print' },
   ];
   const [selectedPrintSize, setSelectedPrintSize] = useState<PrintAreaSizeConfig>(printAreaSizes[1]); // Default A4
 
@@ -191,63 +195,138 @@ export const CustomLab: React.FC = () => {
       && (productType !== 'franela' || m.view === canvasView)
   );
 
-  // Automated Pricing Engine Calculation (Itemized)
+  // Automated DTF & Production Pricing Engine (Enlazado al Monitor de Cotización DTF)
+  // Ancho de rollo fijo: 58 cm (no se toca). El cliente cotiza según el largo del diseño en cm.
   const calculatePricingBreakdown = () => {
-    let base = 25;
-    let oversizeDelta = 0;
-    let sizeExtra = 0;
-    let locationDelta = 0;
-    let sizeAreaDelta = 0;
+    const dtfRatePerCm = 0.13; // $13.00 por metro lineal (100cm)
+    const marginDivisor = 0.70; // 30% margen de ganancia comercial (Divisor 0.70)
 
     if (productType === 'franela') {
-      base = labPricingConfig?.franelaBasePrice || 25;
-      
-      if (fitType === 'Oversize') {
-        oversizeDelta = labPricingConfig?.oversizeExtraDelta ?? 4;
-      } else {
-        const perX = labPricingConfig?.xlExtraDeltaPerX ?? 1.0;
-        if (size === 'XL') sizeExtra = 1 * perX;
-        else if (size === '2XL') sizeExtra = 2 * perX;
-        else if (size === '3XL') sizeExtra = 3 * perX;
-        else if (size === '4XL') sizeExtra = 4 * perX;
+      const isBoth = printLocation === 'ambos_lados';
+      const mainLength = Math.max(5, Math.min(100, designLengthCm));
+      const secLength = isBoth ? Math.max(5, Math.min(50, secondaryLengthCm)) : 0;
+      const totalLength = mainLength + secLength;
+
+      // Insumos y costos de producción (Monitor de Cotización)
+      const baseGarmentCost = fitType === 'Oversize' ? 9.00 : 6.00;
+      let sizeExtraCost = 0;
+      if (fitType !== 'Oversize') {
+        if (size === 'XL') sizeExtraCost = 1.00;
+        else if (size === '2XL') sizeExtraCost = 2.00;
+        else if (size === '3XL') sizeExtraCost = 3.00;
+        else if (size === '4XL') sizeExtraCost = 4.00;
       }
+      const garmentCost = baseGarmentCost + sizeExtraCost;
+      const dtfPrintCost = Number((totalLength * dtfRatePerCm).toFixed(2));
+      const laborCost = 2.60; // 20 min @ $0.13/min
+      const pressCost = isBoth ? 1.50 : 1.00;
+      const packagingCost = 0.20;
 
-      if (printLocation === 'ambos_lados') {
-        locationDelta = labPricingConfig?.bothSidesDelta ?? 6.0;
-      }
+      const subtotalCostos = garmentCost + dtfPrintCost + laborCost + pressCost + packagingCost;
+      const total = Number((subtotalCostos / marginDivisor).toFixed(2));
 
-      sizeAreaDelta = selectedPrintSize?.surchargeUSD || 0;
-
-      const total = base + oversizeDelta + sizeExtra + locationDelta + sizeAreaDelta;
-      return { base, oversizeDelta, sizeExtra, locationDelta, sizeAreaDelta, total };
+      return {
+        productType,
+        totalLength,
+        mainLength,
+        secLength,
+        garmentCost,
+        dtfPrintCost,
+        laborCost,
+        pressCost,
+        packagingCost,
+        subtotalCostos,
+        total
+      };
     }
 
     if (productType === 'tote') {
-      base = labPricingConfig?.toteBasePrice || 16;
-      if (printLocation === 'ambos_lados') {
-        locationDelta = labPricingConfig?.bothSidesDelta ? labPricingConfig.bothSidesDelta / 2 : 4;
-      }
-      sizeAreaDelta = selectedPrintSize?.surchargeUSD ? selectedPrintSize.surchargeUSD / 2 : 0;
-      const total = base + locationDelta + sizeAreaDelta;
-      return { base, oversizeDelta: 0, sizeExtra: 0, locationDelta, sizeAreaDelta, total };
+      const isBoth = printLocation === 'ambos_lados';
+      const mainLength = Math.max(5, Math.min(45, designLengthCm));
+      const secLength = isBoth ? Math.max(5, Math.min(45, secondaryLengthCm)) : 0;
+      const totalLength = mainLength + secLength;
+
+      const baseToteCost = 3.50;
+      const dtfPrintCost = Number((totalLength * dtfRatePerCm).toFixed(2));
+      const laborCost = 1.50;
+      const pressCost = isBoth ? 1.20 : 0.80;
+      const packagingCost = 0.20;
+
+      const subtotalCostos = baseToteCost + dtfPrintCost + laborCost + pressCost + packagingCost;
+      const total = Number((subtotalCostos / marginDivisor).toFixed(2));
+
+      return {
+        productType,
+        totalLength,
+        mainLength,
+        secLength,
+        garmentCost: baseToteCost,
+        dtfPrintCost,
+        laborCost,
+        pressCost,
+        packagingCost,
+        subtotalCostos,
+        total
+      };
     }
 
     if (productType === 'lamina') {
       const unit = laminaMeasure.price;
       const total = unit * laminaQuantity;
-      return { base: unit, oversizeDelta: 0, sizeExtra: 0, locationDelta: 0, sizeAreaDelta: 0, total };
+      return {
+        productType,
+        totalLength: 0,
+        mainLength: 0,
+        secLength: 0,
+        garmentCost: unit,
+        dtfPrintCost: 0,
+        laborCost: 0,
+        pressCost: 0,
+        packagingCost: 0,
+        subtotalCostos: unit * 0.70,
+        total
+      };
     }
 
     if (productType === 'stickers') {
-      let total = 10;
-      if (stickerQuantity === 5) total = 6;
-      else if (stickerQuantity === 10) total = 10;
-      else if (stickerQuantity === 25) total = 20;
-      else total = 35;
-      return { base: total, oversizeDelta: 0, sizeExtra: 0, locationDelta: 0, sizeAreaDelta: 0, total };
+      let baseTotal = 10;
+      if (stickerQuantity === 5) baseTotal = 6;
+      else if (stickerQuantity === 10) baseTotal = 10;
+      else if (stickerQuantity === 25) baseTotal = 20;
+      else baseTotal = 35;
+
+      if (stickerFinish === 'UV DTF') {
+        baseTotal = Number((baseTotal * 1.25).toFixed(2));
+      }
+
+      return {
+        productType,
+        totalLength: 0,
+        mainLength: 0,
+        secLength: 0,
+        garmentCost: baseTotal * 0.5,
+        dtfPrintCost: 0,
+        laborCost: 0,
+        pressCost: 0,
+        packagingCost: 0,
+        subtotalCostos: baseTotal * 0.70,
+        total: baseTotal
+      };
     }
 
-    return { base: 25, oversizeDelta: 0, sizeExtra: 0, locationDelta: 0, sizeAreaDelta: 0, total: 25 };
+    return {
+      productType,
+      totalLength: 30,
+      mainLength: 30,
+      secLength: 0,
+      garmentCost: 6.00,
+      dtfPrintCost: 3.90,
+      laborCost: 2.60,
+      pressCost: 1.00,
+      packagingCost: 0.20,
+      subtotalCostos: 13.70,
+      total: 19.57
+    };
   };
 
   const pricing = calculatePricingBreakdown();
@@ -307,10 +386,10 @@ export const CustomLab: React.FC = () => {
     let customTitle = '';
     if (productType === 'franela') {
       const locLabel = printLocation === 'ambos_lados' ? 'Ambos Lados' : printLocation === 'detras' ? 'Espalda' : 'Frente';
-      customTitle = `Franela ${fitType} (Talla ${size} - ${selectedColor.name} - ${locLabel} - ${selectedPrintSize.label})`;
+      customTitle = `Franela ${fitType} (${selectedColor.name} - Talla ${size} - ${locLabel} - DTF 58×${pricing.totalLength}cm)`;
     } else if (productType === 'tote') {
       const locLabel = printLocation === 'ambos_lados' ? 'Ambos Lados' : 'Frente';
-      customTitle = `Tote Bag Personalizado (${locLabel} - ${selectedPrintSize.label})`;
+      customTitle = `Tote Bag Personalizado (${locLabel} - DTF 58×${pricing.totalLength}cm)`;
     } else if (productType === 'lamina') {
       customTitle = `Lámina de Aluminio Sublimada (${laminaMeasure.label} x${laminaQuantity})`;
     } else {
@@ -329,15 +408,15 @@ export const CustomLab: React.FC = () => {
         basePrice: currentPrice,
         oversizePriceDelta: fitType === 'Oversize' ? 4 : 0,
         images: [placedArtworkUrl || matchingUploadedMockup?.imageUrl || '/src/assets/images/hero_streetwear_1791054715974.jpg'],
-        scripture: placedText || 'Diseño Exclusivo ÉXODO Caracas',
+        scripture: placedText || '',
         spiritualMeaning: 'Pieza personalizada creada por el cliente en el Laboratorio ÉXODO.',
         materialSpecs: productType === 'franela' 
-          ? `100% Algodón Peinado Pesado 240g/m² (${fitType}) • Estampado DTF Textil HD • Estampado en: ${printLocation.toUpperCase()} (${selectedPrintSize.dimensionsCm})`
+          ? `100% Algodón Peinado Pesado 240g/m² (${fitType}) • Impresión DTF Textil HD • Estampado en: ${printLocation.toUpperCase()} (Rollo 58 cm × ${pricing.totalLength} cm largo)`
           : productType === 'lamina'
           ? `Placa de Aluminio Náutico Pulido (${laminaMeasure.label}) con 4 perforaciones de montaje`
           : productType === 'stickers'
           ? `Impresión ${stickerFinish} impermeable de alta adherencia`
-          : 'Lienzo de algodón crudo 100% biodegradable',
+          : `Lienzo de algodón crudo 100% biodegradable • Impresión DTF Textil HD (Rollo 58 cm × ${pricing.totalLength} cm largo)`,
         unifiedDescription: `Personalización directa: ${customTitle}. ${placedText ? `Texto incluido: "${placedText}".` : ''}`,
         availableSizes: [size],
         availableColors: [selectedColor],
@@ -358,7 +437,9 @@ export const CustomLab: React.FC = () => {
         laminaMeasure: productType === 'lamina' ? laminaMeasure.label : undefined,
         laminaQuantity: productType === 'lamina' ? laminaQuantity : undefined,
         printLocation: printLocation,
-        printDimensionsCm: `${selectedPrintSize.dimensionsCm} (${selectedPrintSize.label})`,
+        printDimensionsCm: (productType === 'franela' || productType === 'tote')
+          ? `58 × ${pricing.totalLength} cm (Largo: ${designLengthCm} cm${printLocation === 'ambos_lados' ? ` + ${secondaryLengthCm} cm` : ''})`
+          : `${selectedPrintSize.dimensionsCm} (${selectedPrintSize.label})`,
         scale: artworkScale,
         rotate: artworkRotate,
         posX: artworkPos.x,
@@ -777,41 +858,67 @@ export const CustomLab: React.FC = () => {
 
             </div>
 
-            {/* Itemized Price Breakdown Card */}
-            <div className="p-4 rounded-xl bg-neutral-900/60 border border-neutral-800 space-y-2 mb-4">
-              <span className="text-[10px] font-mono uppercase tracking-wider text-neutral-400 font-bold block">
-                Desglose Automático de Precio:
-              </span>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
-                <div className="p-2 rounded bg-neutral-950 border border-neutral-850">
-                  <span className="text-[10px] text-neutral-500 block">Base:</span>
-                  <span className="text-white font-bold">${pricing.base.toFixed(2)}</span>
-                </div>
-                {pricing.oversizeDelta > 0 && (
-                  <div className="p-2 rounded bg-neutral-950 border border-neutral-850">
-                    <span className="text-[10px] text-neutral-500 block">Oversize:</span>
-                    <span className="text-amber-400 font-bold">+${pricing.oversizeDelta.toFixed(2)}</span>
-                  </div>
-                )}
-                {pricing.sizeExtra > 0 && (
-                  <div className="p-2 rounded bg-neutral-950 border border-neutral-850">
-                    <span className="text-[10px] text-neutral-500 block">Talla {size}:</span>
-                    <span className="text-amber-400 font-bold">+${pricing.sizeExtra.toFixed(2)}</span>
-                  </div>
-                )}
-                {pricing.locationDelta > 0 && (
-                  <div className="p-2 rounded bg-neutral-950 border border-neutral-850">
-                    <span className="text-[10px] text-neutral-500 block">Ambos Lados:</span>
-                    <span className="text-amber-400 font-bold">+${pricing.locationDelta.toFixed(2)}</span>
-                  </div>
-                )}
-                {pricing.sizeAreaDelta > 0 && (
-                  <div className="p-2 rounded bg-neutral-950 border border-neutral-850">
-                    <span className="text-[10px] text-neutral-500 block">Área {selectedPrintSize.label}:</span>
-                    <span className="text-amber-400 font-bold">+${pricing.sizeAreaDelta.toFixed(2)}</span>
-                  </div>
-                )}
+            {/* Itemized Price Breakdown Card (Enlazado al Monitor de Cotización) */}
+            <div className="p-4 rounded-xl bg-neutral-900/60 border border-neutral-800 space-y-2.5 mb-4">
+              <div className="flex items-center justify-between">
+                <span className="text-[10px] font-mono uppercase tracking-wider text-amber-400 font-bold block">
+                  Cotización Oficial de Producción & DTF:
+                </span>
+                <span className="text-[10px] font-mono text-neutral-400 bg-neutral-800/80 px-2 py-0.5 rounded">
+                  {productType === 'franela' || productType === 'tote' ? `Ancho rollo: 58 cm fijo • Largo: ${pricing.totalLength} cm` : 'Cálculo por piezas'}
+                </span>
               </div>
+
+              {(productType === 'franela' || productType === 'tote') ? (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs font-mono">
+                  <div className="p-2 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-500 block">Soporte ({productType === 'franela' ? fitType : 'Lienzo Crudo'}):</span>
+                    <span className="text-white font-bold">${pricing.garmentCost.toFixed(2)}</span>
+                  </div>
+                  <div className="p-2 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-500 block">Impresión DTF ({pricing.totalLength} cm):</span>
+                    <span className="text-amber-400 font-bold">${pricing.dtfPrintCost.toFixed(2)}</span>
+                  </div>
+                  <div className="p-2 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-500 block">Confección & Planchado:</span>
+                    <span className="text-neutral-300 font-bold">${(pricing.laborCost + pricing.pressCost).toFixed(2)}</span>
+                  </div>
+                  <div className="p-2 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-500 block">Margen Divisor (0.70):</span>
+                    <span className="text-emerald-400 font-bold">30% Ganancia</span>
+                  </div>
+                </div>
+              ) : productType === 'lamina' ? (
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+                  <div className="p-2 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-500 block">Medida Lámina:</span>
+                    <span className="text-white font-bold">{laminaMeasure.label}</span>
+                  </div>
+                  <div className="p-2 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-500 block">Cantidad:</span>
+                    <span className="text-amber-400 font-bold">x{laminaQuantity} uds</span>
+                  </div>
+                  <div className="p-2 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-500 block">Precio Unitario:</span>
+                    <span className="text-emerald-400 font-bold">${laminaMeasure.price.toFixed(2)} c/u</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-3 gap-2 text-xs font-mono">
+                  <div className="p-2 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-500 block">Acabado:</span>
+                    <span className="text-white font-bold">{stickerFinish}</span>
+                  </div>
+                  <div className="p-2 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-500 block">Unidades del Pack:</span>
+                    <span className="text-amber-400 font-bold">x{stickerQuantity} stickers</span>
+                  </div>
+                  <div className="p-2 rounded bg-neutral-950 border border-neutral-800">
+                    <span className="text-[10px] text-neutral-500 block">Precio por Pack:</span>
+                    <span className="text-emerald-400 font-bold">${pricing.total.toFixed(2)}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Price & Add to Cart Footer */}
@@ -1121,45 +1228,122 @@ export const CustomLab: React.FC = () => {
                   </div>
                 )}
 
-                {/* 2. MEDIDAS EN CENTÍMETROS DEL ESTAMPADO */}
+                {/* 2. MEDIDAS EN CENTÍMETROS DEL ESTAMPADO (ANCHO 58CM FIJO, LARGO A COTIZAR) */}
                 {(productType === 'franela' || productType === 'tote') && (
-                  <div>
-                    <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 block mb-2 flex items-center gap-1.5">
-                      <Ruler size={14} className="text-amber-400" />
-                      <span>Medida del Estampado (Centímetros):</span>
-                    </label>
-                    <div className="grid grid-cols-2 gap-2">
-                      {printAreaSizes.map((area) => (
-                        <button
-                          key={area.id}
-                          type="button"
-                          onClick={() => setSelectedPrintSize(area)}
-                          className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
-                            selectedPrintSize.id === area.id
-                              ? 'bg-amber-400/10 border-amber-400 text-white shadow-md'
-                              : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
-                          }`}
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-black block font-brand-heading text-white">
-                              {area.label}
-                            </span>
-                            {area.surchargeUSD > 0 ? (
-                              <span className="text-[10px] text-amber-400 font-mono font-bold">
-                                +${area.surchargeUSD}
-                              </span>
-                            ) : (
-                              <span className="text-[9px] text-neutral-500 font-mono">
-                                Incluido
-                              </span>
-                            )}
-                          </div>
-                          <span className="text-[11px] text-amber-300 font-mono block mt-0.5">
-                            {area.dimensionsCm}
-                          </span>
-                        </button>
-                      ))}
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="text-xs font-bold uppercase tracking-wider text-neutral-300 flex items-center gap-1.5">
+                        <Ruler size={14} className="text-amber-400" />
+                        <span>Medidas del Estampado DTF (cm):</span>
+                      </label>
+                      <span className="text-[10px] font-mono text-amber-400 font-bold bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/30">
+                        Ancho 58 cm Fijo (Rollo)
+                      </span>
                     </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      {printAreaSizes.map((area) => {
+                        let presetLength = 30;
+                        if (area.id === 'pocket') presetLength = 10;
+                        else if (area.id === 'a4') presetLength = 30;
+                        else if (area.id === 'a3') presetLength = 42;
+                        else if (area.id === 'maxi') presetLength = 50;
+
+                        const isSelected = selectedPrintSize.id === area.id && designLengthCm === presetLength;
+
+                        return (
+                          <button
+                            key={area.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedPrintSize(area);
+                              setDesignLengthCm(presetLength);
+                            }}
+                            className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer ${
+                              isSelected
+                                ? 'bg-amber-400/15 border-amber-400 text-white shadow-md'
+                                : 'bg-neutral-900 border-neutral-800 text-neutral-400 hover:text-white'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-black block font-brand-heading text-white">
+                                {area.label}
+                              </span>
+                              <span className="text-[10px] text-amber-400 font-mono font-bold">
+                                {presetLength} cm
+                              </span>
+                            </div>
+                            <span className="text-[11px] text-neutral-400 font-mono block mt-0.5">
+                              58 × {presetLength} cm
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    {/* Selector interactivo de largo en cm */}
+                    <div className="p-3 rounded-xl bg-neutral-900/90 border border-neutral-800 space-y-2">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-neutral-300 font-semibold">Largo del diseño principal:</span>
+                        <div className="flex items-center gap-1.5">
+                          <input
+                            type="number"
+                            min={5}
+                            max={productType === 'franela' ? 70 : 40}
+                            value={designLengthCm}
+                            onChange={(e) => setDesignLengthCm(Math.max(5, Math.min(productType === 'franela' ? 70 : 40, Number(e.target.value) || 5)))}
+                            className="w-14 px-1.5 py-0.5 bg-black border border-neutral-700 rounded text-right font-mono font-bold text-amber-400 text-xs focus:outline-none focus:border-amber-400"
+                          />
+                          <span className="text-neutral-400 font-mono text-xs">cm</span>
+                        </div>
+                      </div>
+                      <input
+                        type="range"
+                        min={5}
+                        max={productType === 'franela' ? 70 : 40}
+                        value={designLengthCm}
+                        onChange={(e) => setDesignLengthCm(Number(e.target.value))}
+                        className="w-full accent-amber-400 cursor-pointer"
+                      />
+                      <div className="flex justify-between text-[10px] text-neutral-500 font-mono">
+                        <span>5 cm (Mínimo)</span>
+                        <span>30 cm (A4)</span>
+                        <span>{productType === 'franela' ? '70 cm (Full)' : '40 cm (Máx)'}</span>
+                      </div>
+                    </div>
+
+                    {/* Si seleccionó Ambos Lados, largo para el segundo estampado */}
+                    {printLocation === 'ambos_lados' && (
+                      <div className="p-3 rounded-xl bg-neutral-900/90 border border-amber-500/30 space-y-2">
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-amber-300 font-semibold">Largo del segundo estampado (Espalda/Pecho):</span>
+                          <div className="flex items-center gap-1.5">
+                            <input
+                              type="number"
+                              min={5}
+                              max={45}
+                              value={secondaryLengthCm}
+                              onChange={(e) => setSecondaryLengthCm(Math.max(5, Math.min(45, Number(e.target.value) || 5)))}
+                              className="w-14 px-1.5 py-0.5 bg-black border border-neutral-700 rounded text-right font-mono font-bold text-amber-400 text-xs focus:outline-none focus:border-amber-400"
+                            />
+                            <span className="text-neutral-400 font-mono text-xs">cm</span>
+                          </div>
+                        </div>
+                        <input
+                          type="range"
+                          min={5}
+                          max={45}
+                          value={secondaryLengthCm}
+                          onChange={(e) => setSecondaryLengthCm(Number(e.target.value))}
+                          className="w-full accent-amber-400 cursor-pointer"
+                        />
+                        <div className="flex justify-between text-[10px] text-neutral-500 font-mono">
+                          <span>5 cm</span>
+                          <span>12 cm (Pecho)</span>
+                          <span>45 cm</span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 )}
 

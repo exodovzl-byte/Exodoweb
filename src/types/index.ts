@@ -8,7 +8,8 @@ export type ProductCollection =
   | 'Música' 
   | 'Venezuela' 
   | 'Básicos con Propósito'
-  | 'Personalizado en Laboratorio';
+  | 'Personalizado en Laboratorio'
+  | (string & {});
 
 export type ProductSupportType = 'franela' | 'tote' | 'lamina' | 'stickers';
 
@@ -334,9 +335,13 @@ export interface ArtworkDesign {
 export interface PrayerRequest {
   id: string;
   name: string;
+  fullName?: string;
   phone: string;
+  email?: string;
+  category?: string;
   requestText: string;
-  source: 'devocionales' | 'nosotros' | 'general';
+  request?: string;
+  source?: 'devocionales' | 'nosotros' | 'general' | string;
   createdAt: string;
   status: 'nueva' | 'en_oracion' | 'respondida';
 }

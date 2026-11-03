@@ -150,9 +150,15 @@ export const FeaturedProducts: React.FC = () => {
                 <div className="p-2.5 sm:p-4 flex flex-col flex-grow justify-between">
                   <div>
                     {/* Biblical Verse Snippet */}
-                    <p className="text-[9px] sm:text-[10px] font-mono text-amber-400 font-semibold truncate uppercase">
-                      {product.scripture.split('—')[0]}
-                    </p>
+                    {product.scripture && product.scripture.trim().length > 0 ? (
+                      <p className="text-[9px] sm:text-[10px] font-mono text-amber-400 font-semibold truncate uppercase">
+                        {product.scripture.split('—')[0]}
+                      </p>
+                    ) : (
+                      <p className="text-[9px] sm:text-[10px] font-mono text-neutral-400 uppercase">
+                        Personalizado • ÉXODO
+                      </p>
+                    )}
                     
                     {/* Title */}
                     <h3 className="mt-0.5 text-xs sm:text-sm font-bold text-white group-hover:text-[#C8C3B3] transition-colors line-clamp-1">

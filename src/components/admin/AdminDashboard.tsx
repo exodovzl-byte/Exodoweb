@@ -32,7 +32,10 @@ import {
   Receipt,
   FileCheck,
   Cloud,
-  AlertTriangle
+  AlertTriangle,
+  Star,
+  BookOpen,
+  Heart
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { Product, Order, KanbanColumn, CategoryCircle, ProductCategory, ProductCollection } from '../../types';
@@ -47,6 +50,7 @@ import { CashCloseModal } from './CashCloseModal';
 import { OrderDetailModal } from './OrderDetailModal';
 import { ManualOrderModal } from './ManualOrderModal';
 import { CustomLabAdminConfig } from './CustomLabAdminConfig';
+import { DevotionalsAndPrayersManager } from './DevotionalsAndPrayersManager';
 import { compressImageFile } from '../../utils/imageCompressor';
 
 export const AdminDashboard: React.FC = () => {
@@ -66,6 +70,8 @@ export const AdminDashboard: React.FC = () => {
     addProduct,
     updateProduct,
     deleteProduct,
+    collections,
+    addCollection,
     artworkDesigns,
     brandConfig,
     updateBrandConfig,
@@ -76,6 +82,8 @@ export const AdminDashboard: React.FC = () => {
     addCategoryCircle,
     updateCategoryCircle,
     deleteCategoryCircle,
+    devotionals,
+    prayerRequests,
     googleSheetsUrl,
     setGoogleSheetsUrl,
     lastSyncedTimestamp,
@@ -95,7 +103,7 @@ export const AdminDashboard: React.FC = () => {
     syncNowWithCloud,
   } = useStore();
 
-  const [activeTab, setActiveTab] = useState<'kanban' | 'products' | 'artworks' | 'brand' | 'treasury' | 'custom_lab' | 'sheets'>('kanban');
+  const [activeTab, setActiveTab] = useState<'kanban' | 'products' | 'artworks' | 'brand' | 'treasury' | 'custom_lab' | 'sheets' | 'devotionals_prayers'>('kanban');
 
   // Kanban Filters
   const [kanbanSearch, setKanbanSearch] = useState('');
@@ -114,24 +122,46 @@ export const AdminDashboard: React.FC = () => {
   const [newColumnTitle, setNewColumnTitle] = useState('');
   const [newColumnColor, setNewColumnColor] = useState('#2563EB');
 
-  // Product Add / Edit Modal
+  // Product Add / Edit Modal (Multi-image, Portada selection, Dynamic Collection, Scripture toggle)
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [productImages, setProductImages] = useState<string[]>([]);
   const [productImageInput, setProductImageInput] = useState<string>('');
+  const [selectedProductCollection, setSelectedProductCollection] = useState<string>('BeneCristiana');
+  const [isAddingNewCollection, setIsAddingNewCollection] = useState<boolean>(false);
+  const [newCollectionNameInput, setNewCollectionNameInput] = useState<string>('');
+  const [hasScripture, setHasScripture] = useState<boolean>(true);
   const [isAssetPickerOpen, setIsAssetPickerOpen] = useState<boolean>(false);
   const [isUploadingProductImage, setIsUploadingProductImage] = useState<boolean>(false);
   const productFileInputRef = useRef<HTMLInputElement | null>(null);
 
+  // Category Circle Image Upload from Device
+  const [uploadingCircleId, setUploadingCircleId] = useState<string | null>(null);
+  const circleFileInputRef = useRef<HTMLInputElement | null>(null);
+  const [selectedCircleForUpload, setSelectedCircleForUpload] = useState<CategoryCircle | null>(null);
+
   const handleOpenAddProduct = () => {
     setEditingProduct(null);
-    setProductImageInput('/src/assets/images/franela_oversize_1791054727426.jpg');
+    const initialImg = '/src/assets/images/franela_oversize_1791054727426.jpg';
+    setProductImages([initialImg]);
+    setProductImageInput(initialImg);
+    setSelectedProductCollection(collections[0] || 'BeneCristiana');
+    setIsAddingNewCollection(false);
+    setNewCollectionNameInput('');
+    setHasScripture(true);
     setIsAssetPickerOpen(false);
     setIsProductModalOpen(true);
   };
 
   const handleOpenEditProduct = (prod: Product) => {
     setEditingProduct(prod);
-    setProductImageInput(prod.images[0] || '/src/assets/images/franela_oversize_1791054727426.jpg');
+    const imgs = prod.images && prod.images.length > 0 ? [...prod.images] : ['/src/assets/images/franela_oversize_1791054727426.jpg'];
+    setProductImages(imgs);
+    setProductImageInput(imgs[0]);
+    setSelectedProductCollection(prod.collection || collections[0] || 'BeneCristiana');
+    setIsAddingNewCollection(false);
+    setNewCollectionNameInput('');
+    setHasScripture(Boolean(prod.scripture && prod.scripture.trim().length > 0));
     setIsAssetPickerOpen(false);
     setIsProductModalOpen(true);
   };
@@ -146,12 +176,59 @@ export const AdminDashboard: React.FC = () => {
     try {
       setIsUploadingProductImage(true);
       const compressed = await compressImageFile(file, 1200, 0.88);
+      setProductImages((prev) => [...prev, compressed]);
       setProductImageInput(compressed);
     } catch (err) {
       console.error('Error optimizando imagen de producto:', err);
       alert('Error al procesar la imagen.');
     } finally {
       setIsUploadingProductImage(false);
+      if (e.target) e.target.value = '';
+    }
+  };
+
+  const handleSetCoverImage = (index: number) => {
+    if (index === 0) return;
+    setProductImages((prev) => {
+      const selected = prev[index];
+      const rest = prev.filter((_, i) => i !== index);
+      const next = [selected, ...rest];
+      setProductImageInput(selected);
+      return next;
+    });
+  };
+
+  const handleRemoveProductImage = (index: number) => {
+    if (productImages.length <= 1) {
+      alert('El producto debe tener al menos una imagen.');
+      return;
+    }
+    setProductImages((prev) => {
+      const next = prev.filter((_, i) => i !== index);
+      if (index === 0 && next[0]) {
+        setProductImageInput(next[0]);
+      }
+      return next;
+    });
+  };
+
+  const handleCategoryCircleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedCircleForUpload) return;
+    try {
+      setUploadingCircleId(selectedCircleForUpload.id);
+      const compressed = await compressImageFile(file, 600, 0.88);
+      updateCategoryCircle({
+        ...selectedCircleForUpload,
+        image: compressed,
+      });
+      setSelectedCircleForUpload(null);
+    } catch (err) {
+      console.error('Error optimizando imagen de categoría:', err);
+      alert('Error al procesar la imagen.');
+    } finally {
+      setUploadingCircleId(null);
+      if (e.target) e.target.value = '';
     }
   };
 
@@ -258,15 +335,18 @@ export const AdminDashboard: React.FC = () => {
 
     const name = formData.get('name') as string;
     const category = formData.get('category') as ProductCategory;
-    const collection = formData.get('collection') as ProductCollection;
+    const collection = (selectedProductCollection || (formData.get('collection') as string) || 'BeneCristiana') as ProductCollection;
     const basePrice = parseFloat(formData.get('basePrice') as string) || 20;
     const discountPriceRaw = formData.get('discountPrice') as string;
     const discountPrice = discountPriceRaw ? parseFloat(discountPriceRaw) : undefined;
     const oversizePriceDelta = parseFloat(formData.get('oversizePriceDelta') as string) || 0;
-    const imageUrl = productImageInput.trim() || (formData.get('imageUrl') as string) || '/src/assets/images/franela_oversize_1791054727426.jpg';
-    const scripture = formData.get('scripture') as string;
+    const scripture = hasScripture ? ((formData.get('scripture') as string) || '').trim() : '';
     const unifiedDescription = formData.get('unifiedDescription') as string;
     const stock = parseInt(formData.get('stock') as string) || 20;
+
+    const finalImages = productImages.length > 0 
+      ? productImages 
+      : [productImageInput.trim() || '/src/assets/images/franela_oversize_1791054727426.jpg'];
 
     const updatedOrNew: Product = {
       id: editingProduct ? editingProduct.id : `prod-${Date.now()}`,
@@ -277,7 +357,7 @@ export const AdminDashboard: React.FC = () => {
       basePrice,
       discountPrice,
       oversizePriceDelta,
-      images: [imageUrl],
+      images: finalImages,
       scripture,
       spiritualMeaning: 'Diseño inspirado en la resistencia espiritual y la gloria de Cristo.',
       materialSpecs: category === 'franelas' ? '100% Algodón Peinado Pesado 240g, estampado DTF' : 'Material premium resistente',
@@ -432,6 +512,20 @@ export const AdminDashboard: React.FC = () => {
               <FileSpreadsheet size={13} />
               <span>Sheets</span>
             </button>
+            <button
+              onClick={() => setActiveTab('devotionals_prayers')}
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                activeTab === 'devotionals_prayers' ? 'bg-[#0D253A] text-amber-400 shadow-md' : 'text-neutral-400 hover:text-white'
+              }`}
+            >
+              <BookOpen size={13} />
+              <span>La Palabra & Oración</span>
+              {prayerRequests.filter(p => p.status === 'nueva').length > 0 && (
+                <span className="px-1.5 py-0.2 rounded-full bg-amber-500 text-black text-[9px] font-black animate-pulse">
+                  {prayerRequests.filter(p => p.status === 'nueva').length}
+                </span>
+              )}
+            </button>
           </div>
 
           {/* Right Controls: Notifications & Logout */}
@@ -578,6 +672,7 @@ export const AdminDashboard: React.FC = () => {
               <option value="brand">🏷️ Marca & Logos</option>
               <option value="custom_lab">⚙️ Custom Lab & Precios</option>
               <option value="sheets">📊 Google Sheets</option>
+              <option value="devotionals_prayers">📖 La Palabra & Oración ({prayerRequests.filter(p => p.status === 'nueva').length} nuevas)</option>
             </select>
             <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-neutral-400 pointer-events-none" size={16} />
           </div>
@@ -592,6 +687,7 @@ export const AdminDashboard: React.FC = () => {
               { id: 'brand', label: 'Marca', icon: Palette },
               { id: 'custom_lab', label: 'Custom Lab', icon: Sliders },
               { id: 'sheets', label: 'Sheets', icon: FileSpreadsheet },
+              { id: 'devotionals_prayers', label: 'La Palabra', count: prayerRequests.filter(p => p.status === 'nueva').length || undefined, icon: BookOpen },
             ].map((chip) => {
               const Icon = chip.icon;
               const isActive = activeTab === chip.id;
@@ -1251,7 +1347,16 @@ export const AdminDashboard: React.FC = () => {
             {/* Multi-Font Typography Manager Component */}
             <MultiFontManager />
 
-            {/* Circle Manager: Add/Edit/Delete circular category icons */}
+            {/* Hidden File Input for Category Circles */}
+            <input
+              type="file"
+              ref={circleFileInputRef}
+              accept="image/*"
+              onChange={handleCategoryCircleImageUpload}
+              className="hidden"
+            />
+
+            {/* Circle Manager: Categorías Principales & Colecciones */}
             <div className="p-6 rounded-2xl bg-neutral-900/40 border border-neutral-800 space-y-6">
               <div className="flex items-center justify-between">
                 <div>
@@ -1259,78 +1364,160 @@ export const AdminDashboard: React.FC = () => {
                     Gestor de Círculos (Home & Catálogo)
                   </h3>
                   <p className="text-xs text-neutral-400">
-                    Control de iconos circulares de colecciones y categorías.
+                    Cambia la imagen de los 4 círculos principales de categorías y administra los círculos de colecciones.
                   </p>
                 </div>
               </div>
 
-              {/* Add Circle Form */}
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-neutral-950 border border-neutral-800">
-                <input
-                  type="text"
-                  placeholder="Título (ej. BeneCristiana)"
-                  value={newCircleTitle}
-                  onChange={(e) => setNewCircleTitle(e.target.value)}
-                  className="p-2 rounded bg-neutral-900 border border-neutral-800 text-xs text-white"
-                />
-                <input
-                  type="text"
-                  placeholder="URL Imagen o /src/assets/..."
-                  value={newCircleImage}
-                  onChange={(e) => setNewCircleImage(e.target.value)}
-                  className="p-2 rounded bg-neutral-900 border border-neutral-800 text-xs text-white"
-                />
-                <input
-                  type="text"
-                  placeholder="Valor de Filtro (ej. BeneCristiana)"
-                  value={newCircleValue}
-                  onChange={(e) => setNewCircleValue(e.target.value)}
-                  className="p-2 rounded bg-neutral-900 border border-neutral-800 text-xs text-white"
-                />
-                <button
-                  onClick={() => {
-                    if (!newCircleTitle || !newCircleValue) return;
-                    addCategoryCircle({
-                      id: `circle-${Date.now()}`,
-                      title: newCircleTitle,
-                      image: newCircleImage || '/src/assets/images/franela_oversize_1791054727426.jpg',
-                      type: newCircleType,
-                      value: newCircleValue,
-                    });
-                    setNewCircleTitle('');
-                    setNewCircleImage('');
-                    setNewCircleValue('');
-                  }}
-                  className="py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold uppercase rounded"
-                >
-                  + Agregar Círculo
-                </button>
+              {/* 1. CATEGORÍAS PRINCIPALES (Franela, Tote Bag, Láminas, Stickers) */}
+              <div className="space-y-3">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-400 font-mono block">
+                  ★ Categorías Principales del Home (4 Círculos)
+                </span>
+                
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {categoryCircles.map((circle) => (
+                    <div
+                      key={circle.id}
+                      className="p-4 rounded-2xl bg-neutral-950 border border-neutral-800 flex flex-col items-center text-center space-y-3 hover:border-neutral-700 transition-all shadow-md group"
+                    >
+                      {/* Avatar preview */}
+                      <div className="relative w-20 h-20 rounded-full p-1 border-2 border-neutral-700 group-hover:border-amber-400 transition-colors bg-neutral-900 overflow-hidden">
+                        <img
+                          src={circle.image}
+                          alt={circle.title}
+                          referrerPolicy="no-referrer"
+                          className="w-full h-full rounded-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = '/assets/aistudio/exodo-appIcon_cbe32977.png';
+                          }}
+                        />
+                        {uploadingCircleId === circle.id && (
+                          <div className="absolute inset-0 bg-black/75 flex items-center justify-center rounded-full">
+                            <RefreshCw size={18} className="animate-spin text-amber-400" />
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <span className="text-xs font-black uppercase text-white block font-brand-heading">
+                          {circle.title}
+                        </span>
+                        <span className="text-[10px] text-neutral-500 font-mono block">
+                          Línea: {circle.value}
+                        </span>
+                      </div>
+
+                      {/* Upload / Change Image Buttons */}
+                      <div className="w-full space-y-1.5 pt-1 border-t border-neutral-850">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedCircleForUpload(circle);
+                            circleFileInputRef.current?.click();
+                          }}
+                          disabled={uploadingCircleId === circle.id}
+                          className="w-full py-1.5 px-2 bg-amber-500/10 hover:bg-amber-500 text-amber-400 hover:text-black border border-amber-500/30 rounded-lg text-[10px] font-bold uppercase transition-all flex items-center justify-center gap-1 cursor-pointer disabled:opacity-50"
+                        >
+                          <Upload size={11} />
+                          <span>Subir Foto</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const newUrl = window.prompt(`Ingresa la URL de la imagen para ${circle.title}:`, circle.image);
+                            if (newUrl && newUrl.trim()) {
+                              updateCategoryCircle({
+                                ...circle,
+                                image: newUrl.trim(),
+                              });
+                            }
+                          }}
+                          className="w-full py-1 px-2 bg-neutral-900 hover:bg-neutral-800 text-neutral-400 hover:text-white rounded-lg text-[9px] font-mono transition-colors"
+                        >
+                          Pegar URL
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </div>
 
-              {/* Existing Circles list */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
-                {collectionCircles.map((circle) => (
-                  <div
-                    key={circle.id}
-                    className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-col items-center text-center relative group"
+              {/* 2. CÍRCULOS DE COLECCIONES ADICIONALES */}
+              <div className="space-y-3 pt-4 border-t border-neutral-800">
+                <span className="text-xs font-bold uppercase tracking-wider text-neutral-300 font-mono block">
+                  Círculos de Colecciones Adicionales ({collectionCircles.length})
+                </span>
+
+                {/* Add Circle Form */}
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 p-4 rounded-xl bg-neutral-950 border border-neutral-800">
+                  <input
+                    type="text"
+                    placeholder="Título (ej. BeneCristiana)"
+                    value={newCircleTitle}
+                    onChange={(e) => setNewCircleTitle(e.target.value)}
+                    className="p-2 rounded bg-neutral-900 border border-neutral-800 text-xs text-white"
+                  />
+                  <input
+                    type="text"
+                    placeholder="URL Imagen o /src/assets/..."
+                    value={newCircleImage}
+                    onChange={(e) => setNewCircleImage(e.target.value)}
+                    className="p-2 rounded bg-neutral-900 border border-neutral-800 text-xs text-white"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Valor de Filtro (ej. BeneCristiana)"
+                    value={newCircleValue}
+                    onChange={(e) => setNewCircleValue(e.target.value)}
+                    className="p-2 rounded bg-neutral-900 border border-neutral-800 text-xs text-white"
+                  />
+                  <button
+                    onClick={() => {
+                      if (!newCircleTitle || !newCircleValue) return;
+                      addCategoryCircle({
+                        id: `circle-${Date.now()}`,
+                        title: newCircleTitle,
+                        image: newCircleImage || '/src/assets/images/franela_oversize_1791054727426.jpg',
+                        type: newCircleType,
+                        value: newCircleValue,
+                      });
+                      setNewCircleTitle('');
+                      setNewCircleImage('');
+                      setNewCircleValue('');
+                    }}
+                    className="py-2 bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold uppercase rounded cursor-pointer"
                   >
-                    <div className="w-14 h-14 rounded-full overflow-hidden border border-neutral-700 mb-2">
-                      <img src={circle.image} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
-                    </div>
-                    <span className="text-xs font-bold text-white truncate max-w-full">
-                      {circle.title}
-                    </span>
-                    <span className="text-[10px] text-neutral-500 font-mono truncate max-w-full">
-                      {circle.value}
-                    </span>
-                    <button
-                      onClick={() => deleteCategoryCircle(circle.id)}
-                      className="absolute top-2 right-2 p-1 text-neutral-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity"
+                    + Agregar Círculo
+                  </button>
+                </div>
+
+                {/* Existing Circles list */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
+                  {collectionCircles.map((circle) => (
+                    <div
+                      key={circle.id}
+                      className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 flex flex-col items-center text-center relative group"
                     >
-                      <Trash2 size={13} />
-                    </button>
-                  </div>
-                ))}
+                      <div className="w-14 h-14 rounded-full overflow-hidden border border-neutral-700 mb-2">
+                        <img src={circle.image} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                      </div>
+                      <span className="text-xs font-bold text-white truncate max-w-full">
+                        {circle.title}
+                      </span>
+                      <span className="text-[10px] text-neutral-500 font-mono truncate max-w-full">
+                        {circle.value}
+                      </span>
+                      <button
+                        onClick={() => deleteCategoryCircle(circle.id)}
+                        className="absolute top-2 right-2 p-1 text-neutral-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
 
             </div>
@@ -1453,6 +1640,13 @@ export const AdminDashboard: React.FC = () => {
           </div>
         )}
 
+        {/* ======================================================== */}
+        {/* TAB: LA PALABRA (DEVOCIONALES) & PETICIONES DE ORACIÓN   */}
+        {/* ======================================================== */}
+        {activeTab === 'devotionals_prayers' && (
+          <DevotionalsAndPrayersManager />
+        )}
+
       </div>
 
       {/* MODAL: ADD / EDIT PRODUCT */}
@@ -1483,7 +1677,7 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="text-neutral-300 block mb-1 font-bold">Categoría *</label>
                   <select
@@ -1499,20 +1693,55 @@ export const AdminDashboard: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-neutral-300 block mb-1 font-bold">Colección *</label>
-                  <select
-                    name="collection"
-                    defaultValue={editingProduct?.collection || 'BeneCristiana'}
-                    className="w-full p-2.5 rounded bg-neutral-900 border border-neutral-800 text-white"
-                  >
-                    <option value="BeneCristiana">BeneCristiana</option>
-                    <option value="El Museo">El Museo</option>
-                    <option value="El Ángel Caído">El Ángel Caído</option>
-                    <option value="Anime">Anime</option>
-                    <option value="Música">Música</option>
-                    <option value="Venezuela">Venezuela</option>
-                    <option value="Básicos con Propósito">Básicos con Propósito</option>
-                  </select>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-neutral-300 font-bold">Colección *</label>
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingNewCollection(!isAddingNewCollection)}
+                      className="text-[10px] text-amber-400 font-bold hover:underline cursor-pointer"
+                    >
+                      {isAddingNewCollection ? 'Cancelar' : '+ Nueva Colección'}
+                    </button>
+                  </div>
+
+                  {!isAddingNewCollection ? (
+                    <select
+                      name="collection"
+                      value={selectedProductCollection}
+                      onChange={(e) => setSelectedProductCollection(e.target.value)}
+                      className="w-full p-2.5 rounded bg-neutral-900 border border-neutral-800 text-white"
+                    >
+                      {collections.map((col) => (
+                        <option key={col} value={col}>
+                          {col}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        placeholder="Nombre nueva colección..."
+                        value={newCollectionNameInput}
+                        onChange={(e) => setNewCollectionNameInput(e.target.value)}
+                        className="flex-1 p-2 rounded bg-neutral-900 border border-amber-400 text-white text-xs font-mono"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (!newCollectionNameInput.trim()) return;
+                          const clean = newCollectionNameInput.trim();
+                          addCollection(clean);
+                          setSelectedProductCollection(clean);
+                          setIsAddingNewCollection(false);
+                          setNewCollectionNameInput('');
+                        }}
+                        className="px-3 py-2 bg-amber-500 hover:bg-amber-400 text-black font-bold text-xs uppercase rounded cursor-pointer shrink-0"
+                      >
+                        Crear
+                      </button>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -1553,15 +1782,43 @@ export const AdminDashboard: React.FC = () => {
                 </div>
               </div>
 
-              <div>
-                <label className="text-neutral-300 block mb-1 font-bold">Versículo Bíblico de Referencia *</label>
-                <input
-                  name="scripture"
-                  type="text"
-                  required
-                  defaultValue={editingProduct?.scripture || 'Romanos 8:37 — Más que vencedores por medio de aquel que nos amó.'}
-                  className="w-full p-2.5 rounded bg-neutral-900 border border-neutral-800 text-white font-mono"
-                />
+              {/* Versículo Bíblico Opcional (Toggle para Personalización) */}
+              <div className="p-3.5 rounded-xl bg-neutral-900/60 border border-neutral-800 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-neutral-200 font-bold block text-xs">
+                      ¿Lleva Versículo Bíblico?
+                    </label>
+                    <span className="text-[10px] text-neutral-400 block">
+                      Desactívalo si es una pieza de personalización pura sin versículo.
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setHasScripture(!hasScripture)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors cursor-pointer ${
+                      hasScripture ? 'bg-amber-500' : 'bg-neutral-800'
+                    }`}
+                  >
+                    <span
+                      className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                        hasScripture ? 'translate-x-6' : 'translate-x-1'
+                      }`}
+                    />
+                  </button>
+                </div>
+
+                {hasScripture && (
+                  <div className="pt-2 animate-in fade-in">
+                    <input
+                      name="scripture"
+                      type="text"
+                      defaultValue={editingProduct?.scripture || 'Romanos 8:37 — Más que vencedores por medio de aquel que nos amó.'}
+                      placeholder="Ej. Isaías 40:31 — Los que esperan en Jehová..."
+                      className="w-full p-2.5 rounded bg-neutral-900 border border-neutral-800 text-white font-mono text-xs"
+                    />
+                  </div>
+                )}
               </div>
 
               <div>
@@ -1585,14 +1842,80 @@ export const AdminDashboard: React.FC = () => {
                 />
               </div>
 
-              {/* Imagen Principal del Producto con Subida y Selector de Assets */}
+              {/* GESTIÓN MULTI-FOTOS DEL PRODUCTO CON SELECCIÓN DE PORTADA */}
               <div className="p-4 rounded-xl bg-neutral-900/80 border border-neutral-800 space-y-3">
                 <div className="flex items-center justify-between">
-                  <label className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
-                    <ImageIcon size={14} className="text-amber-400" />
-                    <span>Foto / Gráfico Principal del Producto</span>
-                  </label>
-                  <span className="text-[10px] text-neutral-400 font-mono">Visible en la tienda</span>
+                  <div>
+                    <label className="text-xs font-bold text-amber-300 uppercase tracking-wider flex items-center gap-1.5">
+                      <ImageIcon size={14} className="text-amber-400" />
+                      <span>Fotos del Producto ({productImages.length})</span>
+                    </label>
+                    <span className="text-[10px] text-neutral-400">
+                      La primera foto con insignia <strong className="text-amber-400">★ Portada</strong> es la visible en el catálogo.
+                    </span>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => productFileInputRef.current?.click()}
+                    disabled={isUploadingProductImage}
+                    className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold uppercase flex items-center gap-1 cursor-pointer disabled:opacity-50"
+                  >
+                    <Plus size={13} />
+                    <span>+ Agregar Foto</span>
+                  </button>
+                </div>
+
+                {/* Thumbnails grid */}
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2.5 pt-1">
+                  {productImages.map((img, idx) => {
+                    const isCover = idx === 0;
+                    return (
+                      <div
+                        key={idx}
+                        className={`relative aspect-square rounded-xl overflow-hidden border-2 flex flex-col items-center justify-center bg-black group ${
+                          isCover ? 'border-amber-400 shadow-md ring-1 ring-amber-400/50' : 'border-neutral-800 hover:border-neutral-600'
+                        }`}
+                      >
+                        <img
+                          src={img}
+                          alt={`Foto ${idx + 1}`}
+                          className="w-full h-full object-cover"
+                          onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).src = '/assets/aistudio/exodo-appIcon_cbe32977.png';
+                          }}
+                        />
+
+                        {/* Cover Badge or Set Cover Action */}
+                        {isCover ? (
+                          <div className="absolute top-1 left-1 px-1.5 py-0.5 rounded bg-amber-500 text-black text-[9px] font-black uppercase flex items-center gap-0.5 shadow">
+                            <Star size={9} className="fill-black" />
+                            <span>Portada</span>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleSetCoverImage(idx)}
+                            className="absolute inset-0 bg-black/70 opacity-0 group-hover:opacity-100 flex items-center justify-center text-amber-300 hover:text-white text-[10px] font-bold uppercase transition-opacity p-1 text-center cursor-pointer"
+                          >
+                            Poner de Portada
+                          </button>
+                        )}
+
+                        {/* Delete photo button (allowed if > 1 image) */}
+                        {productImages.length > 1 && (
+                          <button
+                            type="button"
+                            onClick={() => handleRemoveProductImage(idx)}
+                            className="absolute top-1 right-1 p-1 rounded-full bg-black/80 hover:bg-red-950 text-neutral-400 hover:text-red-400 transition-colors shadow z-10 cursor-pointer"
+                            title="Eliminar foto"
+                          >
+                            <Trash2 size={11} />
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
 
                 {/* Hidden file input */}
@@ -1604,73 +1927,28 @@ export const AdminDashboard: React.FC = () => {
                   className="hidden"
                 />
 
-                {/* Hidden input to ensure form submission has imageUrl */}
-                <input
-                  type="hidden"
-                  name="imageUrl"
-                  value={productImageInput}
-                />
-
-                <div className="flex flex-col sm:flex-row items-center gap-4">
-                  {/* Image Preview with transparency pattern */}
-                  <div
-                    className="relative w-28 h-28 rounded-xl overflow-hidden shrink-0 border border-neutral-700 shadow-inner flex items-center justify-center group"
-                    style={{
-                      backgroundImage: `
-                        linear-gradient(45deg, #222 25%, transparent 25%),
-                        linear-gradient(-45deg, #222 25%, transparent 25%),
-                        linear-gradient(45deg, transparent 75%, #222 75%),
-                        linear-gradient(-45deg, transparent 75%, #222 75%)
-                      `,
-                      backgroundSize: '12px 12px',
-                      backgroundPosition: '0 0, 0 6px, 6px -6px, -6px 0px',
-                      backgroundColor: '#161616',
-                    }}
+                <div className="flex flex-wrap gap-2 pt-2 border-t border-neutral-850">
+                  <button
+                    type="button"
+                    onClick={() => setIsAssetPickerOpen(!isAssetPickerOpen)}
+                    className="flex-1 px-3 py-2 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-neutral-700 transition-colors cursor-pointer"
                   >
-                    {isUploadingProductImage ? (
-                      <div className="flex flex-col items-center justify-center text-center p-2">
-                        <RefreshCw size={20} className="animate-spin text-amber-400 mb-1" />
-                        <span className="text-[9px] text-amber-300 font-bold">Optimizando...</span>
-                      </div>
-                    ) : (
-                      <img
-                        src={productImageInput || '/assets/aistudio/exodo-appIcon_cbe32977.png'}
-                        alt="Vista previa de producto"
-                        className="w-full h-full object-contain p-1"
-                        onError={(e) => {
-                          (e.target as HTMLImageElement).src = '/assets/aistudio/exodo-appIcon_cbe32977.png';
-                        }}
-                      />
-                    )}
-                  </div>
+                    <Palette size={13} className="text-amber-400" />
+                    <span>Elegir de Assets ({artworkDesigns.length})</span>
+                  </button>
 
-                  {/* Upload and Asset Buttons */}
-                  <div className="flex-1 w-full space-y-2">
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => productFileInputRef.current?.click()}
-                        disabled={isUploadingProductImage}
-                        className="flex-1 min-w-[130px] px-3 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-black text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 shadow-md active:scale-95 transition-all cursor-pointer disabled:opacity-50"
-                      >
-                        <Upload size={14} />
-                        <span>Subir Foto</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => setIsAssetPickerOpen(!isAssetPickerOpen)}
-                        className="flex-1 min-w-[130px] px-3 py-2.5 rounded-xl bg-neutral-800 hover:bg-neutral-700 text-neutral-200 text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-1.5 border border-neutral-700 transition-colors cursor-pointer"
-                      >
-                        <Palette size={14} className="text-amber-400" />
-                        <span>Elegir de Assets ({artworkDesigns.length})</span>
-                      </button>
-                    </div>
-
-                    <p className="text-[10px] text-neutral-400">
-                      Sube cualquier foto desde tu teléfono o PC (se optimizará y comprimirá automáticamente) o selecciona un arte ya guardado en la librería de Assets.
-                    </p>
-                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const url = window.prompt('Ingresa la URL directa de la foto para añadirla:');
+                      if (url && url.trim()) {
+                        setProductImages((prev) => [...prev, url.trim()]);
+                      }
+                    }}
+                    className="px-3 py-2 rounded-xl bg-neutral-900 hover:bg-neutral-800 text-neutral-300 text-xs font-mono border border-neutral-800 transition-colors cursor-pointer"
+                  >
+                    Pegar URL
+                  </button>
                 </div>
 
                 {/* Inline Assets Selector Drawer */}
@@ -1678,7 +1956,7 @@ export const AdminDashboard: React.FC = () => {
                   <div className="p-3 rounded-xl bg-neutral-950 border border-neutral-800 space-y-2 animate-in fade-in">
                     <div className="flex items-center justify-between">
                       <span className="text-[11px] font-bold text-neutral-300">
-                        Selecciona un gráfico de la librería:
+                        Selecciona un gráfico de la librería para agregarlo:
                       </span>
                       <button
                         type="button"
@@ -1694,14 +1972,10 @@ export const AdminDashboard: React.FC = () => {
                         <div
                           key={art.id}
                           onClick={() => {
-                            setProductImageInput(art.highResGraphic);
+                            setProductImages((prev) => [...prev, art.highResGraphic]);
                             setIsAssetPickerOpen(false);
                           }}
-                          className={`relative aspect-square rounded-lg overflow-hidden border cursor-pointer hover:scale-105 transition-transform flex items-center justify-center p-1 ${
-                            productImageInput === art.highResGraphic
-                              ? 'border-amber-400 ring-2 ring-amber-400/50 bg-amber-500/10'
-                              : 'border-neutral-800 bg-neutral-900 hover:border-neutral-600'
-                          }`}
+                          className="relative aspect-square rounded-lg overflow-hidden border border-neutral-800 bg-neutral-900 hover:border-amber-400 cursor-pointer hover:scale-105 transition-transform flex items-center justify-center p-1"
                           title={art.title}
                         >
                           <img
