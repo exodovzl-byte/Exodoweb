@@ -346,19 +346,34 @@ export interface PrayerRequest {
   status: 'nueva' | 'en_oracion' | 'respondida';
 }
 
+export type SlideType = 'hero_principal' | 'piezas_destacadas' | 'dios_fuera_del_templo' | 'promocion';
+
 export interface HeroSlide {
   id: string;
+  slideType?: SlideType;
   title: string;
   subtitle: string;
   tagline: string;
   image: string;
   buttonText: string;
-  buttonLink: string; // 'tienda' | 'personalizador' | 'descuentos' | etc.
+  buttonLink: string; // 'tienda' | 'personalizador' | 'descuentos' | 'palabra' | 'nosotros' | external URL
+  buttonColor?: string; // hex color e.g. #FBBF24, #FFFFFF, #0D253A, #C8C3B3, #EC4899, #10B981, #EF4444
+  buttonTextColor?: string; // #000000 or #FFFFFF
   secondaryButtonText?: string;
   secondaryButtonLink?: string;
+  secondaryButtonColor?: string;
+  secondaryButtonTextColor?: string;
   active: boolean;
   order: number;
+  isPrimary?: boolean;
 }
+
+export interface HeroCarouselConfig {
+  autoPlay: boolean;
+  transitionIntervalSeconds: number; // e.g. 5 seconds
+  primarySlideId?: string;
+}
+
 
 export interface LaminaSizeConfig {
   id: string;

@@ -39,18 +39,21 @@ const MainContent: React.FC = () => {
     switch (sectionKey) {
       case 'hero':
         return <Hero key="hero" />;
-      case 'benefits':
-        return <Benefits key="benefits" />;
       case 'categories':
         return <CategoryCircles key="categories" />;
-      case 'featured':
-        return <FeaturedProducts key="featured" />;
-      case 'custom_guide':
-        return <CustomGuide key="custom_guide" />;
+      case 'benefits':
+        return <Benefits key="benefits" />;
       case 'verse_spotlight':
         return <VerseSpotlight key="verse_spotlight" />;
+      case 'featured':
+        // Integrated directly into the top carousel as requested
+        return null;
       case 'community':
-        return <CommunityGallery key="community" />;
+        // Integrated directly into the top carousel as requested
+        return null;
+      case 'custom_guide':
+        // Removed per user request ("Quitar el apartado de que dice CREA TU PROPIO MENSAJE")
+        return null;
       default:
         return null;
     }

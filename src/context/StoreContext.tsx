@@ -24,7 +24,8 @@ import {
   OrderFinancialSplit,
   PartnerSalaryWithdrawal,
   MonthlyFinancialSummary,
-  Devotional
+  Devotional,
+  HeroCarouselConfig
 } from '../types';
 
 /**
@@ -58,6 +59,7 @@ import {
   INITIAL_ARTWORK_DESIGNS,
   INITIAL_INSTALLED_FONTS,
   INITIAL_HERO_SLIDES,
+  INITIAL_CAROUSEL_CONFIG,
   INITIAL_LAB_PRICING_CONFIG,
   INITIAL_ABOUT_CONTENT,
   INITIAL_SOCIAL_LINKS,
@@ -183,6 +185,11 @@ interface StoreContextType {
   // Home Banners & Hero Carousel
   heroSlides: HeroSlide[];
   updateHeroSlides: (slides: HeroSlide[]) => void;
+  addHeroSlide: (slide: HeroSlide) => void;
+  deleteHeroSlide: (id: string) => void;
+  setPrimaryHeroSlide: (id: string) => void;
+  carouselConfig: HeroCarouselConfig;
+  updateCarouselConfig: (config: Partial<HeroCarouselConfig>) => void;
 
   // Collections Dynamic Management
   collections: string[];
@@ -363,10 +370,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
       if (rate && !isNaN(rate) && rate > 0) {
         setExchangeRateBCV(rate);
-        localStorage.setItem('exodo_exchange_rate_bcv', rate.toString());
-        setLastBCVUpdate(dateStr);
-        localStorage.setItem('exodo_bcv_last_update', dateStr);
-        saveStoreDataToCloud({ exchangeRateBCV: rate });
+        try {
+          localStorage.setItem('exodo_exchange_rate_bcv', rate.toString());
+          setLastBCVUpdate(dateStr);
+          localStorage.setItem('exodo_bcv_last_update', dateStr);
+        } catch (e) {}
         return rate;
       }
     } catch (err) {
@@ -478,7 +486,48 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   // Hero Carousel Slides
   const [heroSlides, setHeroSlides] = useState<HeroSlide[]>(() => {
     const saved = localStorage.getItem('exodo_hero_slides');
-    return saved ? JSON.parse(saved) : INITIAL_HERO_SLIDES;
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved) as HeroSlide[];
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          // Normalize legacy slides to have appropriate slideTypes
+          const normalized: HeroSlide[] = parsed.map((s, idx) => {
+            let slideType = s.slideType;
+            if (!slideType) {
+              if (s.id === 'slide-1' || s.id === 'slide-hero-principal' || idx === 0) slideType = 'hero_principal';
+              else if (s.id === 'slide-2' || s.id === 'slide-featured-products' || idx === 1) slideType = 'piezas_destacadas';
+              else if (s.id === 'slide-3' || s.id === 'slide-dios-fuera' || idx === 2) slideType = 'dios_fuera_del_templo';
+              else slideType = 'promocion';
+            }
+            return {
+              ...s,
+              slideType,
+              isPrimary: s.isPrimary !== undefined ? s.isPrimary : idx === 0,
+            };
+          });
+
+          // If legacy data only had 1 slide, merge in the featured and community slides
+          const hasFeatured = normalized.some((s) => s.slideType === 'piezas_destacadas');
+          const hasCommunity = normalized.some((s) => s.slideType === 'dios_fuera_del_templo');
+          if (!hasFeatured) normalized.push(INITIAL_HERO_SLIDES[1]);
+          if (!hasCommunity) normalized.push(INITIAL_HERO_SLIDES[2]);
+
+          return normalized;
+        }
+      } catch (e) {}
+    }
+    return INITIAL_HERO_SLIDES;
+  });
+
+  // Hero Carousel Configuration (Autoplay, transition time in seconds, primary slide)
+  const [carouselConfig, setCarouselConfig] = useState<HeroCarouselConfig>(() => {
+    const saved = localStorage.getItem('exodo_carousel_config');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {}
+    }
+    return INITIAL_CAROUSEL_CONFIG;
   });
 
   // Dynamic Collections
@@ -677,7 +726,7 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
     let isMounted = true;
     setIsCloudSyncing(true);
 
-    // 1. Initial Cloud State Hydration with Local Timestamp Protection
+    // 1. Initial Cloud State Hydration (Directly adopts canonical Firestore state)
     fetchStoreDataFromCloud()
       .then((cloudData) => {
         if (!isMounted || !cloudData) {
@@ -685,44 +734,66 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           return;
         }
 
-        const localSyncTime = localStorage.getItem('exodo_cloud_sync_timestamp');
-        // If local changes were made MORE RECENTLY than this cloud snapshot, do not overwrite local state!
-        if (localSyncTime && cloudData.updatedAt && new Date(localSyncTime) > new Date(cloudData.updatedAt)) {
-          console.log('[StoreContext] 💾 Cambios locales son más recientes que la nube, conservando estado local y sincronizando a la nube...');
-          setIsCloudSyncing(false);
-          saveStoreDataToCloud({
-            products,
-            artworkDesigns,
-            brandConfig,
-            orders,
-            labPricingConfig,
-            customLabMockups,
-            heroSlides,
-            collections,
-            partnerWithdrawals,
-            exchangeRateBCV,
-            treasuryAccounts,
-            transactions,
-            debts,
-            cashCloses,
-          });
-          return;
-        }
-
         console.log('[StoreContext] ☁️ Sincronizando datos de la tienda desde la nube...');
-        if (cloudData.brandConfig) setBrandConfig(cloudData.brandConfig);
-        if (cloudData.products && cloudData.products.length > 0) setProducts(cloudData.products);
+        if (Array.isArray(cloudData.products) && cloudData.products.length > 0) {
+          setProducts(cloudData.products);
+          try {
+            localStorage.setItem('exodo_products', JSON.stringify(cloudData.products));
+          } catch (e) {}
+        }
+        if (cloudData.brandConfig) {
+          setBrandConfig(cloudData.brandConfig);
+          try {
+            localStorage.setItem('exodo_brand_config', JSON.stringify(cloudData.brandConfig));
+          } catch (e) {}
+        }
         if (cloudData.labPricingConfig) setLabPricingConfig(cloudData.labPricingConfig);
         if (cloudData.customLabMockups) setCustomLabMockups(cloudData.customLabMockups);
         if (cloudData.artworkDesigns) setArtworkDesigns(cloudData.artworkDesigns);
-        if (cloudData.heroSlides) setHeroSlides(cloudData.heroSlides);
-        if (cloudData.collections) setCollections(cloudData.collections);
+        if (Array.isArray(cloudData.heroSlides) && cloudData.heroSlides.length > 0) {
+          setHeroSlides(cloudData.heroSlides);
+          try {
+            localStorage.setItem('exodo_hero_slides', JSON.stringify(cloudData.heroSlides));
+          } catch (e) {}
+        }
+        if (cloudData.carouselConfig) {
+          setCarouselConfig(cloudData.carouselConfig);
+          try {
+            localStorage.setItem('exodo_carousel_config', JSON.stringify(cloudData.carouselConfig));
+          } catch (e) {}
+        }
+        if (Array.isArray(cloudData.collections) && cloudData.collections.length > 0) {
+          setCollections(cloudData.collections);
+          try {
+            localStorage.setItem('exodo_collections', JSON.stringify(cloudData.collections));
+          } catch (e) {}
+        }
         if (cloudData.aboutContent) setAboutContent(cloudData.aboutContent);
         if (cloudData.socialLinks) setSocialLinks(cloudData.socialLinks);
-        if (Array.isArray(cloudData.categoryCircles) && cloudData.categoryCircles.length > 0) setCategoryCircles(cloudData.categoryCircles);
-        if (Array.isArray(cloudData.collectionCircles) && cloudData.collectionCircles.length > 0) setCollectionCircles(cloudData.collectionCircles);
-        if (Array.isArray(cloudData.devotionals) && cloudData.devotionals.length > 0) setDevotionals(cloudData.devotionals);
-        if (Array.isArray(cloudData.prayerRequests)) setPrayerRequests(cloudData.prayerRequests);
+        if (Array.isArray(cloudData.categoryCircles) && cloudData.categoryCircles.length > 0) {
+          setCategoryCircles(cloudData.categoryCircles);
+          try {
+            localStorage.setItem('exodo_category_circles', JSON.stringify(cloudData.categoryCircles));
+          } catch (e) {}
+        }
+        if (Array.isArray(cloudData.collectionCircles) && cloudData.collectionCircles.length > 0) {
+          setCollectionCircles(cloudData.collectionCircles);
+          try {
+            localStorage.setItem('exodo_collection_circles', JSON.stringify(cloudData.collectionCircles));
+          } catch (e) {}
+        }
+        if (Array.isArray(cloudData.devotionals) && cloudData.devotionals.length > 0) {
+          setDevotionals(cloudData.devotionals);
+          try {
+            localStorage.setItem('exodo_devotionals', JSON.stringify(cloudData.devotionals));
+          } catch (e) {}
+        }
+        if (Array.isArray(cloudData.prayerRequests)) {
+          setPrayerRequests(cloudData.prayerRequests);
+          try {
+            localStorage.setItem('exodo_prayer_requests', JSON.stringify(cloudData.prayerRequests));
+          } catch (e) {}
+        }
         if (Array.isArray(cloudData.partnerWithdrawals)) {
           setPartnerWithdrawals(cloudData.partnerWithdrawals);
         }
@@ -738,8 +809,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const localTs = prev.lastUpdated ? new Date(prev.lastUpdated).getTime() : 0;
             const cloudTs = accounts.lastUpdated ? new Date(accounts.lastUpdated).getTime() : 0;
             if (cloudTs >= localTs) {
-              localStorage.setItem('exodo_treasury_accounts', JSON.stringify(accounts));
-              localStorage.setItem('exodo_cash_balances', JSON.stringify(accounts));
+              try {
+                localStorage.setItem('exodo_treasury_accounts', JSON.stringify(accounts));
+                localStorage.setItem('exodo_cash_balances', JSON.stringify(accounts));
+              } catch (e) {}
               return accounts;
             }
             return prev;
@@ -756,7 +829,9 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         if (cloudData.updatedAt) {
           setLastCloudSyncTimestamp(cloudData.updatedAt);
-          localStorage.setItem('exodo_cloud_sync_timestamp', cloudData.updatedAt);
+          try {
+            localStorage.setItem('exodo_cloud_sync_timestamp', cloudData.updatedAt);
+          } catch (e) {}
         }
         setIsCloudSyncing(false);
       })
@@ -765,29 +840,70 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         setIsCloudSyncing(false);
       });
 
-    // 2. Real-time Subscription (Firestore WebSocket push across devices)
+    // 2. Real-time Subscription (Firestore WebSocket push directly across devices)
     const unsubscribe = subscribeToStoreDataCloud((incoming) => {
       if (!isMounted || !incoming) return;
-      const localSyncTime = localStorage.getItem('exodo_cloud_sync_timestamp');
-      if (localSyncTime && incoming.updatedAt && new Date(localSyncTime) > new Date(incoming.updatedAt)) {
-        console.log('[StoreContext] ⚡ Nube envió evento desactualizado, ignorando...');
-        return;
-      }
 
-      console.log('[StoreContext] ⚡ Nube actualizada en otro dispositivo, aplicando cambios locales...');
-      if (incoming.brandConfig) setBrandConfig(incoming.brandConfig);
-      if (incoming.products && incoming.products.length > 0) setProducts(incoming.products);
+      console.log('[StoreContext] ⚡ Nube actualizada en otro dispositivo, aplicando cambios en tiempo real...');
+      if (Array.isArray(incoming.products) && incoming.products.length > 0) {
+        setProducts(incoming.products);
+        try {
+          localStorage.setItem('exodo_products', JSON.stringify(incoming.products));
+        } catch (e) {}
+      }
+      if (incoming.brandConfig) {
+        setBrandConfig(incoming.brandConfig);
+        try {
+          localStorage.setItem('exodo_brand_config', JSON.stringify(incoming.brandConfig));
+        } catch (e) {}
+      }
       if (incoming.labPricingConfig) setLabPricingConfig(incoming.labPricingConfig);
       if (incoming.customLabMockups) setCustomLabMockups(incoming.customLabMockups);
       if (incoming.artworkDesigns) setArtworkDesigns(incoming.artworkDesigns);
-      if (incoming.heroSlides) setHeroSlides(incoming.heroSlides);
-      if (incoming.collections) setCollections(incoming.collections);
+      if (Array.isArray(incoming.heroSlides) && incoming.heroSlides.length > 0) {
+        setHeroSlides(incoming.heroSlides);
+        try {
+          localStorage.setItem('exodo_hero_slides', JSON.stringify(incoming.heroSlides));
+        } catch (e) {}
+      }
+      if (incoming.carouselConfig) {
+        setCarouselConfig(incoming.carouselConfig);
+        try {
+          localStorage.setItem('exodo_carousel_config', JSON.stringify(incoming.carouselConfig));
+        } catch (e) {}
+      }
+      if (Array.isArray(incoming.collections) && incoming.collections.length > 0) {
+        setCollections(incoming.collections);
+        try {
+          localStorage.setItem('exodo_collections', JSON.stringify(incoming.collections));
+        } catch (e) {}
+      }
       if (incoming.aboutContent) setAboutContent(incoming.aboutContent);
       if (incoming.socialLinks) setSocialLinks(incoming.socialLinks);
-      if (Array.isArray(incoming.categoryCircles) && incoming.categoryCircles.length > 0) setCategoryCircles(incoming.categoryCircles);
-      if (Array.isArray(incoming.collectionCircles) && incoming.collectionCircles.length > 0) setCollectionCircles(incoming.collectionCircles);
-      if (Array.isArray(incoming.devotionals) && incoming.devotionals.length > 0) setDevotionals(incoming.devotionals);
-      if (Array.isArray(incoming.prayerRequests)) setPrayerRequests(incoming.prayerRequests);
+      if (Array.isArray(incoming.categoryCircles) && incoming.categoryCircles.length > 0) {
+        setCategoryCircles(incoming.categoryCircles);
+        try {
+          localStorage.setItem('exodo_category_circles', JSON.stringify(incoming.categoryCircles));
+        } catch (e) {}
+      }
+      if (Array.isArray(incoming.collectionCircles) && incoming.collectionCircles.length > 0) {
+        setCollectionCircles(incoming.collectionCircles);
+        try {
+          localStorage.setItem('exodo_collection_circles', JSON.stringify(incoming.collectionCircles));
+        } catch (e) {}
+      }
+      if (Array.isArray(incoming.devotionals) && incoming.devotionals.length > 0) {
+        setDevotionals(incoming.devotionals);
+        try {
+          localStorage.setItem('exodo_devotionals', JSON.stringify(incoming.devotionals));
+        } catch (e) {}
+      }
+      if (Array.isArray(incoming.prayerRequests)) {
+        setPrayerRequests(incoming.prayerRequests);
+        try {
+          localStorage.setItem('exodo_prayer_requests', JSON.stringify(incoming.prayerRequests));
+        } catch (e) {}
+      }
       if (Array.isArray(incoming.orders)) setOrders(incoming.orders);
       if (Array.isArray(incoming.partnerWithdrawals)) setPartnerWithdrawals(incoming.partnerWithdrawals);
       if (typeof incoming.exchangeRateBCV === 'number' && incoming.exchangeRateBCV > 0) setExchangeRateBCV(incoming.exchangeRateBCV);
@@ -797,8 +913,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
           const localTs = prev.lastUpdated ? new Date(prev.lastUpdated).getTime() : 0;
           const cloudTs = accounts.lastUpdated ? new Date(accounts.lastUpdated).getTime() : 0;
           if (cloudTs >= localTs) {
-            localStorage.setItem('exodo_treasury_accounts', JSON.stringify(accounts));
-            localStorage.setItem('exodo_cash_balances', JSON.stringify(accounts));
+            try {
+              localStorage.setItem('exodo_treasury_accounts', JSON.stringify(accounts));
+              localStorage.setItem('exodo_cash_balances', JSON.stringify(accounts));
+            } catch (e) {}
             return accounts;
           }
           return prev;
@@ -809,30 +927,35 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       if (Array.isArray(incoming.cashCloses)) setCashCloses(incoming.cashCloses);
       if (incoming.updatedAt) {
         setLastCloudSyncTimestamp(incoming.updatedAt);
-        localStorage.setItem('exodo_cloud_sync_timestamp', incoming.updatedAt);
+        try {
+          localStorage.setItem('exodo_cloud_sync_timestamp', incoming.updatedAt);
+        } catch (e) {}
       }
     });
 
-    // 3. Re-check on window focus (e.g., when returning to app on mobile)
-    const onFocus = () => {
+    // 3. Re-check on window focus & mobile tab visibilitychange
+    const refreshCloudData = () => {
       fetchStoreDataFromCloud().then((cloudData) => {
         if (!isMounted || !cloudData) return;
-        const localSyncTime = localStorage.getItem('exodo_cloud_sync_timestamp');
-        if (localSyncTime && cloudData.updatedAt && new Date(localSyncTime) > new Date(cloudData.updatedAt)) {
-          return;
+        if (Array.isArray(cloudData.products) && cloudData.products.length > 0) {
+          setProducts(cloudData.products);
+          try {
+            localStorage.setItem('exodo_products', JSON.stringify(cloudData.products));
+          } catch (e) {}
         }
         if (cloudData.brandConfig) setBrandConfig(cloudData.brandConfig);
-        if (cloudData.products && cloudData.products.length > 0) setProducts(cloudData.products);
         if (cloudData.labPricingConfig) setLabPricingConfig(cloudData.labPricingConfig);
         if (cloudData.customLabMockups) setCustomLabMockups(cloudData.customLabMockups);
         if (cloudData.artworkDesigns) setArtworkDesigns(cloudData.artworkDesigns);
         if (Array.isArray(cloudData.heroSlides) && cloudData.heroSlides.length > 0) setHeroSlides(cloudData.heroSlides);
+        if (cloudData.carouselConfig) setCarouselConfig(cloudData.carouselConfig);
         if (Array.isArray(cloudData.categoryCircles) && cloudData.categoryCircles.length > 0) setCategoryCircles(cloudData.categoryCircles);
         if (Array.isArray(cloudData.collectionCircles) && cloudData.collectionCircles.length > 0) setCollectionCircles(cloudData.collectionCircles);
         if (Array.isArray(cloudData.devotionals) && cloudData.devotionals.length > 0) setDevotionals(cloudData.devotionals);
         if (Array.isArray(cloudData.prayerRequests)) setPrayerRequests(cloudData.prayerRequests);
         if (Array.isArray(cloudData.partnerWithdrawals)) setPartnerWithdrawals(cloudData.partnerWithdrawals);
         if (Array.isArray(cloudData.orders)) setOrders(cloudData.orders);
+        if (Array.isArray(cloudData.collections) && cloudData.collections.length > 0) setCollections(cloudData.collections);
         if (typeof cloudData.exchangeRateBCV === 'number' && cloudData.exchangeRateBCV > 0) setExchangeRateBCV(cloudData.exchangeRateBCV);
         if (cloudData.treasuryAccounts) {
           const accounts = cloudData.treasuryAccounts;
@@ -840,8 +963,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
             const localTs = prev.lastUpdated ? new Date(prev.lastUpdated).getTime() : 0;
             const cloudTs = accounts.lastUpdated ? new Date(accounts.lastUpdated).getTime() : 0;
             if (cloudTs >= localTs) {
-              localStorage.setItem('exodo_treasury_accounts', JSON.stringify(accounts));
-              localStorage.setItem('exodo_cash_balances', JSON.stringify(accounts));
+              try {
+                localStorage.setItem('exodo_treasury_accounts', JSON.stringify(accounts));
+                localStorage.setItem('exodo_cash_balances', JSON.stringify(accounts));
+              } catch (e) {}
               return accounts;
             }
             return prev;
@@ -849,16 +974,25 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         }
         if (cloudData.updatedAt) {
           setLastCloudSyncTimestamp(cloudData.updatedAt);
-          localStorage.setItem('exodo_cloud_sync_timestamp', cloudData.updatedAt);
+          try {
+            localStorage.setItem('exodo_cloud_sync_timestamp', cloudData.updatedAt);
+          } catch (e) {}
         }
       }).catch(() => {});
     };
-    window.addEventListener('focus', onFocus);
+
+    window.addEventListener('focus', refreshCloudData);
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        refreshCloudData();
+      }
+    });
 
     return () => {
       isMounted = false;
       unsubscribe();
-      window.removeEventListener('focus', onFocus);
+      window.removeEventListener('focus', refreshCloudData);
+      document.removeEventListener('visibilitychange', refreshCloudData);
     };
   }, []);
 
@@ -913,6 +1047,10 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
   useEffect(() => {
     localStorage.setItem('exodo_hero_slides', JSON.stringify(heroSlides));
   }, [heroSlides]);
+
+  useEffect(() => {
+    localStorage.setItem('exodo_carousel_config', JSON.stringify(carouselConfig));
+  }, [carouselConfig]);
 
   useEffect(() => {
     localStorage.setItem('exodo_collections', JSON.stringify(collections));
@@ -2276,7 +2414,58 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
 
   const updateHeroSlides = (slides: HeroSlide[]) => {
     setHeroSlides(slides);
+    try {
+      localStorage.setItem('exodo_hero_slides', JSON.stringify(slides));
+    } catch (e) {}
     saveStoreDataToCloud({ heroSlides: slides });
+  };
+
+  const addHeroSlide = (slide: HeroSlide) => {
+    setHeroSlides((prev) => {
+      const next = [...prev, slide];
+      try {
+        localStorage.setItem('exodo_hero_slides', JSON.stringify(next));
+      } catch (e) {}
+      saveStoreDataToCloud({ heroSlides: next });
+      return next;
+    });
+  };
+
+  const deleteHeroSlide = (id: string) => {
+    setHeroSlides((prev) => {
+      const next = prev.filter((s) => s.id !== id);
+      try {
+        localStorage.setItem('exodo_hero_slides', JSON.stringify(next));
+      } catch (e) {}
+      saveStoreDataToCloud({ heroSlides: next });
+      return next;
+    });
+  };
+
+  const setPrimaryHeroSlide = (id: string) => {
+    setHeroSlides((prev) => {
+      const next = prev.map((s) => ({
+        ...s,
+        isPrimary: s.id === id,
+      }));
+      try {
+        localStorage.setItem('exodo_hero_slides', JSON.stringify(next));
+      } catch (e) {}
+      saveStoreDataToCloud({ heroSlides: next });
+      return next;
+    });
+    updateCarouselConfig({ primarySlideId: id });
+  };
+
+  const updateCarouselConfig = (config: Partial<HeroCarouselConfig>) => {
+    setCarouselConfig((prev) => {
+      const next = { ...prev, ...config };
+      try {
+        localStorage.setItem('exodo_carousel_config', JSON.stringify(next));
+      } catch (e) {}
+      saveStoreDataToCloud({ carouselConfig: next });
+      return next;
+    });
   };
 
   const addCollection = (name: string) => {
@@ -2595,6 +2784,11 @@ export const StoreProvider: React.FC<{ children: React.ReactNode }> = ({ childre
         toggleArtworkSupport,
         heroSlides,
         updateHeroSlides,
+        addHeroSlide,
+        deleteHeroSlide,
+        setPrimaryHeroSlide,
+        carouselConfig,
+        updateCarouselConfig,
         collections,
         addCollection,
         updateCollection,

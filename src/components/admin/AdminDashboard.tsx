@@ -493,7 +493,7 @@ export const AdminDashboard: React.FC = () => {
               }`}
             >
               <Palette size={13} />
-              <span>Portada & Marca</span>
+              <span>Carrusel & Marca</span>
             </button>
             <button
               onClick={() => setActiveTab('custom_lab')}

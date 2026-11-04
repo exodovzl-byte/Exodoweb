@@ -38,10 +38,10 @@ export const StoreCatalog: React.FC = () => {
     // Search query filter
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
-      const matchName = p.name.toLowerCase().includes(q);
-      const matchScripture = p.scripture.toLowerCase().includes(q);
-      const matchCollection = p.collection.toLowerCase().includes(q);
-      const matchMeaning = p.spiritualMeaning.toLowerCase().includes(q);
+      const matchName = (p.name || '').toLowerCase().includes(q);
+      const matchScripture = (p.scripture || '').toLowerCase().includes(q);
+      const matchCollection = (p.collection || '').toLowerCase().includes(q);
+      const matchMeaning = (p.spiritualMeaning || '').toLowerCase().includes(q);
       if (!matchName && !matchScripture && !matchCollection && !matchMeaning) {
         return false;
       }
@@ -284,7 +284,7 @@ export const StoreCatalog: React.FC = () => {
                   {/* Image Container */}
                   <div className="relative aspect-square w-full bg-neutral-950 overflow-hidden">
                     <img
-                      src={product.images[0]}
+                      src={product.images?.[0] || '/assets/aistudio/exodo-appIcon_cbe32977.png'}
                       alt={product.name}
                       referrerPolicy="no-referrer"
                       onError={(e) => {
@@ -367,7 +367,7 @@ export const StoreCatalog: React.FC = () => {
                         </p>
                       ) : (
                         <p className="mt-0.5 text-[10px] sm:text-[11px] text-neutral-400 truncate">
-                          {product.category === 'franelas' ? 'Algodón 240g • DTF Textil' : product.materialSpecs.split(',')[0]}
+                          {product.category === 'franelas' ? 'Algodón 240g • DTF Textil' : (product.materialSpecs || 'Material Premium').split(',')[0]}
                         </p>
                       )}
                     </div>

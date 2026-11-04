@@ -11,7 +11,6 @@ import {
 } from 'lucide-react';
 import { useStore } from '../../context/StoreContext';
 import { ExodoSwordLogo, ExodoEmblemLogo } from '../common/ExodoLogos';
-import { PWAInstallButton } from '../common/PWAInstallButton';
 
 export const Footer: React.FC = () => {
   const { 
@@ -71,10 +70,6 @@ export const Footer: React.FC = () => {
 
       {/* Main Grid */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-        
-        {/* PWA Direct Installation Banner */}
-        <PWAInstallButton variant="banner" className="mb-10" />
-
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-8">
           
           {/* Col 1 & 2: Brand Identity */}

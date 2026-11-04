@@ -6,8 +6,8 @@
 
 export async function compressImageFile(
   file: File,
-  maxDimension = 1200,
-  quality = 0.88
+  maxDimension = 900,
+  quality = 0.82
 ): Promise<string> {
   return new Promise((resolve, reject) => {
     // If SVG, read as text or DataURL directly as SVGs are vector and tiny
@@ -49,25 +49,26 @@ export async function compressImageFile(
         ctx.clearRect(0, 0, width, height);
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Keep PNG transparency if original is PNG, else use high-efficiency JPEG
         const isPng = file.type === 'image/png' || file.name.toLowerCase().endsWith('.png');
         
         try {
+          // 1. WebP preserves alpha transparency for PNGs and produces tiny files (~35-60KB)
+          const webpData = canvas.toDataURL('image/webp', quality);
+          if (webpData.startsWith('data:image/webp') && webpData.length < 280000) {
+            resolve(webpData);
+            return;
+          }
+
+          // 2. If PNG, only keep if under 150KB to protect Firestore 1MB limit
           if (isPng) {
-            // Test if canvas produces reasonably sized PNG
-            const pngData = canvas.toDataURL('image/png', quality);
-            // If PNG is under 600KB, use it to preserve crisp transparency
-            if (pngData.length < 600000) {
+            const pngData = canvas.toDataURL('image/png');
+            if (pngData.length < 150000) {
               resolve(pngData);
               return;
             }
           }
-          // Default to WebP/JPEG for optimal size
-          const webpData = canvas.toDataURL('image/webp', quality);
-          if (webpData.startsWith('data:image/webp')) {
-            resolve(webpData);
-            return;
-          }
+
+          // 3. High efficiency JPEG fallback
           const jpegData = canvas.toDataURL('image/jpeg', quality);
           resolve(jpegData);
         } catch {

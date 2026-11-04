@@ -99,35 +99,21 @@ export const Navbar: React.FC = () => {
                     alt="ÉXODO Logo Oficial"
                     className="h-9 sm:h-11 w-auto max-w-[190px] object-contain drop-shadow transition-all"
                   />
-                  <span className="text-[9px] uppercase tracking-widest text-neutral-400 font-mono hidden sm:inline">
-                    Caracas • Est. 2024
-                  </span>
                 </div>
               ) : brandConfig.activeLogoVersion === 'wordmark' ? (
-                <div className="flex flex-col">
+                <div className="flex items-center">
                   <ExodoWordmarkLogo color="#C8C3B3" className="h-8 sm:h-9 w-auto text-[#C8C3B3] group-hover:text-white transition-colors" />
-                  <span className="text-[9px] uppercase tracking-widest text-neutral-400 font-mono">
-                    Caracas • Est. 2024
-                  </span>
                 </div>
               ) : brandConfig.activeLogoVersion === 'sword' ? (
-                <div className="flex flex-col">
+                <div className="flex items-center">
                   <ExodoSwordLogo color="#C8C3B3" className="h-8 sm:h-10 w-auto text-[#C8C3B3] group-hover:text-white transition-colors" />
-                  <span className="text-[9px] uppercase tracking-widest text-neutral-400 font-mono -mt-1">
-                    Dios Fuera del Templo • Caracas
-                  </span>
                 </div>
               ) : brandConfig.activeLogoVersion === 'badge' ? (
                 <div className="flex items-center gap-2">
                   <ExodoBadgeLogo color="#C8C3B3" className="w-9 h-9 sm:w-11 sm:h-11 text-[#C8C3B3] group-hover:text-white transition-colors" />
-                  <div className="flex flex-col">
-                    <span className="text-xl sm:text-2xl font-black tracking-tight text-[#C8C3B3] group-hover:text-white font-brand-heading leading-none">
-                      ΣXODO
-                    </span>
-                    <span className="text-[9px] uppercase tracking-widest text-neutral-400 font-mono">
-                      Caracas • Est. 2024
-                    </span>
-                  </div>
+                  <span className="text-xl sm:text-2xl font-black tracking-tight text-[#C8C3B3] group-hover:text-white font-brand-heading leading-none">
+                    ΣXODO
+                  </span>
                 </div>
               ) : (
                 <>
@@ -137,14 +123,9 @@ export const Navbar: React.FC = () => {
                   </div>
 
                   {/* Official Typography Wordmark */}
-                  <div className="flex flex-col">
-                    <span className="text-2xl sm:text-3xl font-black tracking-tight text-[#C8C3B3] group-hover:text-white transition-colors font-brand-heading leading-none">
-                      ΣXODO
-                    </span>
-                    <span className="text-[9px] uppercase tracking-widest text-neutral-400 font-mono -mt-0.5">
-                      Caracas • Est. 2024
-                    </span>
-                  </div>
+                  <span className="text-2xl sm:text-3xl font-black tracking-tight text-[#C8C3B3] group-hover:text-white transition-colors font-brand-heading leading-none">
+                    ΣXODO
+                  </span>
                 </>
               )}
             </button>

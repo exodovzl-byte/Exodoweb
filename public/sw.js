@@ -1,5 +1,5 @@
 // Service Worker for ÉXODO PWA (sw.js)
-const CACHE_NAME = 'exodo-pwa-v6';
+const CACHE_NAME = 'exodo-pwa-v8';
 const PRECACHE_ASSETS = [
   '/',
   '/index.html',
@@ -45,6 +45,22 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/api/')) {
     event.respondWith(
       fetch(event.request).catch(() => caches.match(event.request))
+    );
+    return;
+  }
+
+  // Network-first for HTML page navigation to ensure instant updates
+  if (event.request.mode === 'navigate') {
+    event.respondWith(
+      fetch(event.request)
+        .then((networkResponse) => {
+          if (networkResponse && networkResponse.status === 200) {
+            const copy = networkResponse.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
+          }
+          return networkResponse;
+        })
+        .catch(() => caches.match('/index.html'))
     );
     return;
   }

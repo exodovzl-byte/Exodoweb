@@ -91,7 +91,7 @@ export const FeaturedProducts: React.FC = () => {
                 {/* Product Image Frame */}
                 <div className="relative aspect-square w-full bg-neutral-950 overflow-hidden">
                   <img
-                    src={product.images[0]}
+                    src={product.images?.[0] || '/assets/aistudio/exodo-appIcon_cbe32977.png'}
                     alt={product.name}
                     referrerPolicy="no-referrer"
                     onError={(e) => {
@@ -167,7 +167,7 @@ export const FeaturedProducts: React.FC = () => {
 
                     {/* Specs snippet */}
                     <p className="mt-0.5 text-[10px] sm:text-[11px] text-neutral-400 truncate">
-                      {product.category === 'franelas' ? '100% Algodón 240g • DTF Textil' : product.materialSpecs.split(',')[0]}
+                      {product.category === 'franelas' ? '100% Algodón 240g • DTF Textil' : (product.materialSpecs || 'Material Premium').split(',')[0]}
                     </p>
                   </div>
 

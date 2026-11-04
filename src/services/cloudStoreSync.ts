@@ -17,7 +17,8 @@ import {
   DailyCashClose,
   CategoryCircle,
   Devotional,
-  PrayerRequest
+  PrayerRequest,
+  HeroCarouselConfig
 } from '../types';
 
 export interface StoreCloudState {
@@ -27,6 +28,7 @@ export interface StoreCloudState {
   customLabMockups?: CustomLabMockup[];
   artworkDesigns?: ArtworkDesign[];
   heroSlides?: HeroSlide[];
+  carouselConfig?: HeroCarouselConfig;
   collections?: string[];
   orders?: Order[];
   partnerWithdrawals?: PartnerSalaryWithdrawal[];
@@ -86,6 +88,9 @@ export async function saveStoreDataToCloud(
     }
     if (partialData.heroSlides) {
       localStorage.setItem('exodo_hero_slides', JSON.stringify(partialData.heroSlides));
+    }
+    if (partialData.carouselConfig) {
+      localStorage.setItem('exodo_carousel_config', JSON.stringify(partialData.carouselConfig));
     }
     if (partialData.collections) {
       localStorage.setItem('exodo_collections', JSON.stringify(partialData.collections));
